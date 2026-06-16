@@ -232,8 +232,9 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
 
 0. **Require the `safety-gate` check in branch protection on `main`** so a breach
    actually blocks merge (today it only shows red; PR state is `UNSTABLE`). See
-   §5.11. Also close demo PR #1 / delete `demo/gate-breach` once it has served as
-   the demonstration.
+   §5.11; the exact UI steps and `gh api` command are in the README
+   ("Make the gate actually block merges"). Also close demo PR #1 / delete
+   `demo/gate-breach` once it has served as the demonstration.
 1. ~~**Create the GitHub remote & push**~~ ✅ Done. Repo:
    `olonok69/safety-trust-engine` (private); `main` is the default branch; CI
    (`lint-and-test` + `demo-gate` + enforcing `safety-gate`) green on push/PR;
