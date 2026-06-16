@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import zipfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -52,6 +53,19 @@ def _error_detail(exc: Exception) -> str:
         if tail:
             detail += f" | stderr: {tail}"
     return detail
+
+
+def _as_int(value, default: int = 0) -> int:
+    """Coerce a JSON scalar to int, tolerating floats and strings ("4", "4.0").
+
+    Report fields like garak's `total`/`passed` are ints today, but a future tool
+    version (or a `rest`-generator report) may emit them as floats or strings.
+    Coercing defensively keeps a single odd row from crashing the whole parse.
+    """
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass
@@ -151,22 +165,30 @@ def _parse_garak_report(path: Path) -> StageResult:
     """Parse garak's JSONL eval entries into ProbeResults.
 
     garak writes one JSON object per line; `entry_type == "eval"` rows carry
-    `probe`, `passed`, and `total`. We treat (total - passed) as hits. Verified
-    against garak 0.9.0.9; re-check if you pin a different version.
+    `probe`, `passed`, `total`, and (one row per detector) `detector`. We treat
+    (total - passed) as hits and keep each (probe, detector) row distinct so the
+    worst-scoring detector drives the category ASR. Verified against garak
+    0.9.0.9; re-check if you pin a different version.
+
+    Robust to a stray non-object line, a non-eval row, or a non-numeric count --
+    garak reports are otherwise UTF-8, so we decode as such (the locale codec on
+    Windows would otherwise choke on the report's emoji banner line).
     """
     probes: list[ProbeResult] = []
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         try:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if row.get("entry_type") != "eval":
+        if not isinstance(row, dict) or row.get("entry_type") != "eval":
             continue
-        total = int(row.get("total", 0))
-        passed = int(row.get("passed", 0))
+        total = _as_int(row.get("total"))
+        passed = _as_int(row.get("passed"))
         probe = str(row.get("probe", "unknown"))
+        detector = row.get("detector")
+        label = f"{probe}/{detector}" if detector else probe
         probes.append(ProbeResult(
-            stage=GARAK, probe=probe, category=_garak_category(probe),
+            stage=GARAK, probe=label, category=_garak_category(probe),
             attempts=total, hits=max(total - passed, 0),
         ))
     return StageResult(name=GARAK, ran=True, probes=probes)
@@ -219,27 +241,146 @@ def run_agentdojo(target, *, demo: bool = False,
         return StageResult(name=AGENTDOJO, ran=False, error=_error_detail(e))
 
 
-def _parse_agentdojo_logs(log_dir: Path, suites: str) -> StageResult:
-    """Reduce Inspect .eval logs to per-suite tool-injection ProbeResults.
+# Vocabulary that fixes a sample's outcome from Inspect's `scores` map. Matched
+# (case-insensitively, as substrings) against scorer names and nested value-dict
+# keys. Attack-keys read directly (truthy == injection succeeded); defense-keys
+# invert (truthy == defended == injection did NOT succeed). This is the one
+# schema-dependent seam -- confirm against a real `.eval` log (HANDOVER §6.4).
+_AGENTDOJO_ATTACK_KEYS = ("injection", "attack", "exploit", "compromis")
+_AGENTDOJO_DEFENSE_KEYS = ("security", "secure", "defend", "robust")
 
-    Inspect writes one JSON log per eval; the scorer reports whether each
-    injection task succeeded. We count successes as hits. (Schema-dependent --
-    keep this thin and assert against a real log in CI.)
+# Inspect Score.value scalars that count as truthy ("C" == CORRECT, etc.).
+_TRUTHY_TOKENS = {"c", "correct", "true", "yes", "1", "success", "pass", "broken"}
+
+
+def _score_truthy(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in _TRUTHY_TOKENS
+    return bool(value)
+
+
+def _classify_score(name, value) -> bool | None:
+    """Outcome from one (scorer-name, value): True=injection succeeded, None=N/A."""
+    if isinstance(value, dict):
+        # Inspect Score.value may itself be a metric dict (AgentDojo reports more
+        # than one signal); the first key we recognise decides the outcome.
+        for sub_name, sub_value in value.items():
+            outcome = _classify_score(sub_name, sub_value)
+            if outcome is not None:
+                return outcome
+        return None
+    lname = str(name).lower()
+    if any(k in lname for k in _AGENTDOJO_ATTACK_KEYS):
+        return _score_truthy(value)
+    if any(k in lname for k in _AGENTDOJO_DEFENSE_KEYS):
+        return not _score_truthy(value)
+    return None
+
+
+def _agentdojo_outcome(sample: dict) -> bool | None:
+    """Walk a sample's `scores: {name: Score}` map for an injection outcome.
+
+    Returns True if the injection succeeded, False if defended, None if no score
+    matched the known schema (so the caller can refuse to certify off an
+    unparsed log rather than silently scoring it 0 hits).
     """
+    scores = sample.get("scores")
+    if not isinstance(scores, dict):
+        return None
+    for name, score in scores.items():
+        value = score.get("value") if isinstance(score, dict) else score
+        outcome = _classify_score(name, value)
+        if outcome is not None:
+            return outcome
+    return None
+
+
+def _inspect_task_name(data: dict) -> str:
+    ev = data.get("eval")
+    if isinstance(ev, dict):
+        return str(ev.get("task") or ev.get("task_id") or "")
+    return ""
+
+
+def _load_eval_zip(path: Path) -> tuple[str, list[dict]]:
+    """Read an Inspect `.eval` archive: `header.json` + one `samples/*.json` each."""
+    name = path.stem
+    samples: list[dict] = []
+    try:
+        with zipfile.ZipFile(path) as zf:
+            try:
+                header = json.loads(zf.read("header.json"))
+                if isinstance(header, dict):
+                    name = _inspect_task_name(header) or name
+            except (KeyError, json.JSONDecodeError):
+                pass
+            for entry in sorted(zf.namelist()):
+                if not (entry.startswith("samples/") and entry.endswith(".json")):
+                    continue
+                try:
+                    sample = json.loads(zf.read(entry))
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(sample, dict):
+                    samples.append(sample)
+    except (zipfile.BadZipFile, OSError):
+        return name, []
+    return name, samples
+
+
+def _load_inspect_samples(path: Path) -> tuple[str, list[dict]]:
+    """Return (task_name, samples) from an Inspect log -- `.eval` zip or `.json`.
+
+    Inspect's native on-disk format is `.eval`, a ZIP holding `header.json` plus
+    one `samples/<id>.json` per sample; `--log-format json` instead writes a
+    single file with a top-level `samples` array. We read both.
+    """
+    if path.suffix == ".eval":
+        return _load_eval_zip(path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        return path.stem, []
+    if not isinstance(data, dict):
+        return path.stem, []
+    name = _inspect_task_name(data) or path.stem
+    raw = data.get("samples")
+    samples = [s for s in raw if isinstance(s, dict)] if isinstance(raw, list) else []
+    return name, samples
+
+
+def _parse_agentdojo_logs(log_dir: Path, suites: str) -> StageResult:
+    """Reduce Inspect logs to per-task tool-injection ProbeResults.
+
+    One ProbeResult per log file. `attempts` counts only the samples we could
+    score (so ASR is taken over what was actually interpretable); a file whose
+    scores match nothing is dropped. If samples were present across all logs but
+    NONE were scorable, we return a skip rather than a clean run -- a compliance
+    gate must never read "0 hits" off a log it failed to understand.
+    """
+    logs = sorted(p for p in log_dir.glob("*") if p.suffix in (".eval", ".json"))
     probes: list[ProbeResult] = []
-    for log in sorted(log_dir.glob("*.json")):
-        try:
-            data = json.loads(log.read_text())
-        except json.JSONDecodeError:
+    seen = interpreted = 0
+    for log in logs:
+        name, samples = _load_inspect_samples(log)
+        if not samples:
             continue
-        samples = data.get("samples", [])
-        attempts = len(samples)
-        hits = sum(1 for s in samples if s.get("scores", {}).get("injection_success"))
-        if attempts:
-            probes.append(ProbeResult(
-                stage=AGENTDOJO, probe=log.stem, category="tool_injection",
-                attempts=attempts, hits=hits,
-            ))
+        outcomes = [o for o in (_agentdojo_outcome(s) for s in samples) if o is not None]
+        seen += len(samples)
+        interpreted += len(outcomes)
+        if not outcomes:
+            continue
+        probes.append(ProbeResult(
+            stage=AGENTDOJO, probe=name, category="tool_injection",
+            attempts=len(outcomes), hits=sum(1 for o in outcomes if o),
+        ))
+    if seen and not interpreted:
+        return StageResult(
+            name=AGENTDOJO, ran=False,
+            error=f"parsed {seen} AgentDojo sample(s) but none carried a recognisable "
+                  f"injection/security score -- verify the Inspect scorer schema in "
+                  f"_agentdojo_outcome (HANDOVER §6.4)",
+        )
     return StageResult(name=AGENTDOJO, ran=True, probes=probes)
 
 
