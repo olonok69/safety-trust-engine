@@ -52,6 +52,33 @@ jobs:
           path: runs/
 
   # ---------------------------------------------------------------------------
+  # Enforcing gate: run the engine against committed baseline evidence and let
+  # its exit code BLOCK the build. Unlike demo-gate (a self-test that expects a
+  # breach), this is the real PR check -- it is green while the baseline stays
+  # within tolerance and goes RED the moment a change makes the evidence breach.
+  # No keys needed: garak findings are ingested from the fixture, not generated.
+  # ---------------------------------------------------------------------------
+  safety-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - run: uv sync
+      - name: Enforce the impact-tolerance gate on baseline evidence
+        run: |
+          uv run python -m safety_engine.run \
+            --target-provider openai --target-model gpt-4o \
+            --stages garak --garak-report examples/garak.baseline.report.jsonl \
+            --out runs/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safety-gate-evidence
+          path: runs/
+
+  # ---------------------------------------------------------------------------
   # Nightly / on-demand LIVE red-team. Requires secrets; uploads evidence on
   # success AND failure. garak runs as a Docker sidecar; its report is ingested.
   # ---------------------------------------------------------------------------
