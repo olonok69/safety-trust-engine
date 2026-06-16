@@ -28,6 +28,7 @@ of any host app. See §7 for the relationship to that app.
 | Core (compliance map, tolerance gate, evidence artifact, providers, demo) | ✅ done, stdlib-only |
 | PyRIT stage decoupled from the app (model target **or** injected agent factory) | ✅ done |
 | garak Docker sidecar + `--garak-report` ingest | ✅ built & proven against live OpenAI |
+| garak Azure path (bundled `azure` generator) | ✅ proven live vs `gpt-4.1-mini` (encoding 60% → FAIL); handles `engine=` routing + content filter (see §5.10) |
 | AgentDojo (Inspect) stage | ✅ live smoke passed (banking, gpt-4o-mini); engine ingests real `.eval` → gate FAIL on 100% tool_injection. Full all-suites run still untried. |
 | Unit tests (demo-mode + parser fixtures) | ✅ 30 passing |
 | Parser hardening (garak JSONL + Inspect `.eval`/JSON) | ✅ done, verified vs real Inspect output (see §5.9) |
@@ -120,9 +121,11 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
    `gpt-3.5-turbo` for the sidecar.
 3. **garak `rest` generator can't parse OpenAI/Azure JSON** in 0.9.0.9 (top-level
    key index, no JSONPath). That's why the sidecar uses garak's native `openai`
-   generator (works there with openai 0.28.x). For Azure, set the container's
-   openai-v0 Azure env (`OPENAI_API_TYPE=azure`, `OPENAI_API_BASE`,
-   `OPENAI_API_VERSION`) — not yet done.
+   generator (works there with openai 0.28.x). **Azure is now handled by a
+   bundled `azure` generator** (`garak/azure.py`, baked into the image) — see
+   §5.10; the openai-v0-env approach this note used to suggest does *not* work
+   alone, because garak's stock generator calls `create(model=...)` but Azure
+   routes by deployment via `engine=`.
 4. **AgentDojo: live smoke now PASSES.** Resolved on 2026-06-16: a scoped live run
    works end-to-end and the engine ingests the real `.eval`. What was needed:
    - The `live` extra now pulls **`inspect-evals[agentdojo]`** (adds
@@ -183,6 +186,24 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
    `_parse_garak_report` also tolerates non-object lines, non-numeric counts, and
    keeps one row per `(probe, detector)`. A live `inspect_evals/agentdojo` run is
    now only needed for a full end-to-end smoke, not for parser correctness.
+10. **Azure garak path: done & proven live** (2026-06-16, against a real Azure
+    deployment). Implemented as a bundled generator `garak/azure.py` (installed
+    into the image as `garak.generators.azure`, reachable via `--model_type
+    azure`). It configures openai-v0 Azure mode from env, **skips the public
+    model allowlist** (Azure deployment names are arbitrary), and calls with
+    `engine=<deployment>`. It also **handles Azure's content filter**: a blocked
+    prompt (HTTP 400 `content management policy`) is turned into a refusal-style
+    output (seeded with garak mitigation vocab) so it scores as a non-hit and the
+    scan doesn't crash. Gotchas observed:
+    - This `.env`'s `AZURE_OPENAI_ENDPOINT` slot is a *placeholder*; the real host
+      is `AZURE_ENDPOINT` (`...services.ai.azure.com`). Pass it via
+      `-e OPENAI_API_BASE="$AZURE_ENDPOINT"` (highest priority) on `docker run`.
+      Key comes from `AZURE_API_KEY`; version from `AZURE_API_VERSION`.
+    - Verified result (deployment `gpt-4.1-mini`): DAN jailbreak is
+      content-filtered → `jailbreak 0%`; but `encoding.InjectBase64` bypasses the
+      filter ~60% → `encoding 60%` → gate FAIL. Engine ingests via
+      `--target-provider azure --garak-report runs/garak-azure.report.jsonl`.
+    - Build & run commands live in `garak/Dockerfile`'s header.
 
 ---
 
@@ -197,8 +218,10 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
    the `.eval` → gate FAIL on 100% tool_injection. New `--agentdojo-logs` ingest
    flag + `with_sandbox_tasks=no` default. Optional follow-up: a full all-suites
    live run (costly) and an Azure/Inspect (`azureai/*`) variant.
-3. **Azure garak path** — add openai-v0 Azure env to the sidecar (§5.3) for an
-   Azure deployment scan, or keep OpenAI as garak's target.
+3. ~~**Azure garak path**~~ ✅ Done & proven live (see §5.10). Bundled `azure`
+   generator handles Azure routing (`engine=`), the model-name allowlist, and the
+   content filter; verified against deployment `gpt-4.1-mini` (encoding 60% →
+   FAIL). Optional follow-up: broaden probes / wire it into the nightly CI job.
 4. ~~**Harden the parsers** against real logs.~~ ✅ Done (see §5.9): both parsers
    hardened + fixture-tested, verified against real Inspect output, AgentDojo
    scorer name/polarity confirmed from source.
