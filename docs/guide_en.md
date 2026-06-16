@@ -306,4 +306,159 @@ A: They follow the consolidated published texts. DORA and the AI Act have shifte
 
 ---
 
+## Appendix B — Code reference (a guided tour of the source)
+
+A file-by-file map of the implementation with **clickable, line-anchored links**,
+so this guide doubles as a script for a code walkthrough. Read it in data-flow
+order: `run` → `stages` → (`pyrit_campaign` / `dataset` / `providers`) →
+`compliance` → `report`. Links are relative to this file (`docs/`); line anchors
+resolve on GitHub and open the file in the IDE.
+
+**Two patterns recur, worth stating once up front:**
+
+- **Demo vs LIVE SEAM.** Every stage has a deterministic `demo=True` branch
+  (synthetic findings, pure stdlib — what CI and the talk run) and a `# LIVE SEAM`
+  branch that shells out to / imports the real tool. Grep for `# LIVE SEAM`.
+- **Normalisation.** All three tools reduce to
+  [`ProbeResult(category, attempts, hits)`](../src/safety_engine/stages.py#L71-L84);
+  everything downstream (mapper, gate, artifact) is tool-agnostic.
+
+### 1. Orchestrator + CLI — [`src/safety_engine/run.py`](../src/safety_engine/run.py)
+
+The entry point. Builds the target, runs the selected stages, writes the
+artifact, prints the summary, and returns the pass/fail that becomes the process
+exit code (the whole "blocking CI step" hinges on this).
+
+| Symbol | Lines | What it does |
+| --- | --- | --- |
+| [`run(...)`](../src/safety_engine/run.py#L49-L88) | 49–88 | Library entry: loops `STAGE_RUNNERS`, calls [`build_report`](../src/safety_engine/report.py#L71-L107), writes JSON+MD, prints the gate table, returns `report.overall_pass`. Accepts `pyrit_target_factory` for agent red-teaming. |
+| [`main(argv)`](../src/safety_engine/run.py#L91-L134) | 91–134 | The CLI (`safety-engine`). Defines every flag; maps `--garak-report` / `--agentdojo-logs` into target overrides ([122–126](../src/safety_engine/run.py#L122-L126)); returns `0` on pass, `1` on fail ([132–134](../src/safety_engine/run.py#L132-L134)). |
+| [`_parse_tolerances`](../src/safety_engine/run.py#L41-L46) | 41–46 | Turns `--fail-under tool_injection=0.0` strings into a `{category: rate}` dict merged over the defaults. |
+
+Connects to: every stage via [`STAGE_RUNNERS`](../src/safety_engine/stages.py#L500),
+the gate via [`report.build_report`](../src/safety_engine/report.py#L71-L107),
+the target via [`providers.build_target`](../src/safety_engine/providers.py#L39-L69).
+
+### 2. The three stages — [`src/safety_engine/stages.py`](../src/safety_engine/stages.py)
+
+The heart of tool integration. Defines the normalised data model and one
+`run_*` function per tool, each returning a [`StageResult`](../src/safety_engine/stages.py#L87-L104).
+
+**Data model & helpers**
+
+| Symbol | Lines | What it does |
+| --- | --- | --- |
+| [`ProbeResult`](../src/safety_engine/stages.py#L71-L84) | 71–84 | One probe; `asr = hits/attempts` is the property the gate reads. |
+| [`StageResult`](../src/safety_engine/stages.py#L87-L104) | 87–104 | A stage's outcome; [`category_asr()`](../src/safety_engine/stages.py#L94-L99) collapses probes to worst ASR per category; `ran=False` + `error` is the honest "skip". |
+| [`_as_int`](../src/safety_engine/stages.py#L58-L68) / [`_error_detail`](../src/safety_engine/stages.py#L42-L55) / [`_subprocess_env`](../src/safety_engine/stages.py#L27-L39) | 27–68 | Defensive parsing, stderr-surfacing on skip, and forced-UTF-8 child env (the Windows cp1252 fix). |
+
+**Stage 1 — garak** ([`run_garak`](../src/safety_engine/stages.py#L110-L161), 110–161): demo branch
+[112–123](../src/safety_engine/stages.py#L112-L123); **ingest mode** [124–138](../src/safety_engine/stages.py#L124-L138)
+(parse a sidecar report — the real path); LIVE SEAM [139–161](../src/safety_engine/stages.py#L139-L161).
+- [`_parse_garak_report`](../src/safety_engine/stages.py#L164-L194) — reads the JSONL, keeps one row per `(probe, detector)`, hardened against junk lines/counts.
+- [`_garak_category`](../src/safety_engine/stages.py#L197-L204) — maps garak probe names → the normalised vocabulary.
+
+**Stage 2 — AgentDojo** ([`run_agentdojo`](../src/safety_engine/stages.py#L210-L259), 210–259): demo
+[212–222](../src/safety_engine/stages.py#L212-L222); **ingest mode** `--agentdojo-logs`
+[223–239](../src/safety_engine/stages.py#L223-L239); LIVE SEAM [240–259](../src/safety_engine/stages.py#L240-L259)
+(`-T with_sandbox_tasks=no` by default — no Docker sandbox needed). The Inspect-log reduction is the subtle part:
+- [`_load_eval_zip`](../src/safety_engine/stages.py#L333-L375) — reads the native `.eval` (a **zstd** ZIP; imports `zipfile_zstd`, raises [`_EvalReadError`](../src/safety_engine/stages.py#L329-L330) rather than silently scoring 0).
+- [`_load_inspect_samples`](../src/safety_engine/stages.py#L378-L396) — handles `.eval` *and* `--log-format json`.
+- [`_classify_score`](../src/safety_engine/stages.py#L286-L301) / [`_agentdojo_outcome`](../src/safety_engine/stages.py#L304-L319) + the [scorer vocab](../src/safety_engine/stages.py#L262-L277) — the **polarity** seam: AgentDojo's `security == "C"` means the attack *succeeded* (an attack key, not a defence one).
+- [`_parse_agentdojo_logs`](../src/safety_engine/stages.py#L399-L434) — one ProbeResult per log; **skips rather than certifies** if samples exist but none are scorable.
+
+**Stage 3 — PyRIT** ([`run_pyrit`](../src/safety_engine/stages.py#L440-L478), 440–478): demo
+[441–454](../src/safety_engine/stages.py#L441-L454); LIVE SEAM [455–478](../src/safety_engine/stages.py#L455-L478)
+(model target *or* injected `target_factory`).
+- [`_normalize_pyrit`](../src/safety_engine/stages.py#L481-L497) — rows → ProbeResults; a hit is `attempts - refusals` (the v0.13 refusal-scorer inversion).
+- [`STAGE_RUNNERS`](../src/safety_engine/stages.py#L500) — the `{name: runner}` registry `run.py` iterates.
+
+### 3. The PyRIT campaign — [`src/safety_engine/pyrit_campaign.py`](../src/safety_engine/pyrit_campaign.py)
+
+The decoupled multi-turn campaign (imports `pyrit` lazily, so the demo path never
+needs it).
+
+| Symbol | Lines | What it does |
+| --- | --- | --- |
+| [`run_campaign_sync`](../src/safety_engine/pyrit_campaign.py#L146-L175) | 146–175 | Sync entry the stage calls; builds the target (factory **or** [`build_pyrit_target`](../src/safety_engine/providers.py#L135-L168)), runs the async pass, aggregates per category into `{probe, category, attempts, refusals}`. |
+| [`run_campaign`](../src/safety_engine/pyrit_campaign.py#L107-L143) | 107–143 | The async attack: `PromptSendingAttack` over the objectives, scored by `SelfAskRefusalScorer`, `return_partial_on_failure=True`. |
+| [`_serialize_completed`](../src/safety_engine/pyrit_campaign.py#L74-L91) | 74–91 | **The inversion, in code**: scorer `SUCCESS` → refusal detected → *not* a hit. |
+| [`_serialize_incomplete`](../src/safety_engine/pyrit_campaign.py#L94-L104) | 94–104 | Treats a content-filter 400 as a held defence (non-hit) instead of crashing. |
+| [`_build_judge_target`](../src/safety_engine/pyrit_campaign.py#L44-L71) | 44–71 | Builds the judge `OpenAIChatTarget` (OpenAI or Azure) from env. |
+
+### 4. Attack objectives — [`src/safety_engine/dataset.py`](../src/safety_engine/dataset.py)
+
+[`RedTeamCase`](../src/safety_engine/dataset.py#L18-L23) (a `category` + an `objective`
+string) and the curated [`CASES`](../src/safety_engine/dataset.py#L26-L79) set (a finance
+assistant). Swap `CASES` or pass your own to `run_campaign_sync` for a different
+important business service.
+
+### 5. Provider dialects — [`src/safety_engine/providers.py`](../src/safety_engine/providers.py)
+
+The single place that knows each tool's dialect, so one `--target-provider` flag
+re-wires all three stages.
+
+| Symbol | Lines | What it does |
+| --- | --- | --- |
+| [`build_target`](../src/safety_engine/providers.py#L39-L69) | 39–69 | `(provider, model)` → a target dict with garak/Inspect/PyRIT identifiers; merges `**overrides` (e.g. `garak_report`). Only **non-secret** ids go in (it's serialised into the artifact). |
+| [`_azure`](../src/safety_engine/providers.py#L72-L86) / [`_openai`](../src/safety_engine/providers.py#L89-L96) / [`_google`](../src/safety_engine/providers.py#L99-L109) / [`_bedrock`](../src/safety_engine/providers.py#L112-L119) | 72–119 | Per-provider builders → `_BUILDERS` registry. |
+| [`build_pyrit_target`](../src/safety_engine/providers.py#L135-L168) | 135–168 | Builds a PyRIT `OpenAIChatTarget` for openai/azure (raises for the rest — inject a factory instead). |
+| [`PYRIT_BUILDABLE_PROVIDERS`](../src/safety_engine/providers.py#L36) | 36 | Which providers have a built-in PyRIT model target. |
+
+### 6. The regulatory core — [`src/safety_engine/compliance.py`](../src/safety_engine/compliance.py)
+
+Declares which stages **evidence** each control. This is the file to put on screen
+during the talk.
+
+| Symbol | Lines | What it does |
+| --- | --- | --- |
+| [`Control`](../src/safety_engine/compliance.py#L32-L50) | 32–50 | A regulatory obligation: `regulation`, `ref`, `label`, the `stages` that evidence it, the relevant `categories`. |
+| [`CONTROLS`](../src/safety_engine/compliance.py#L56-L143) | 56–143 | The mapping itself — EU AI Act Art. 15 & 55, DORA Art. 24–28, FCA PS21/3 — with citations. |
+| [`GARAK` / `AGENTDOJO` / `PYRIT`](../src/safety_engine/compliance.py#L27-L29) | 27–29 | Stage-id constants used everywhere (so typos surface immediately). |
+
+### 7. Tolerance gate + evidence artifact — [`src/safety_engine/report.py`](../src/safety_engine/report.py)
+
+Consolidation: applies tolerances, evaluates controls, emits the artifact.
+
+| Symbol | Lines | What it does |
+| --- | --- | --- |
+| [`DEFAULT_TOLERANCES`](../src/safety_engine/report.py#L24-L32) | 24–32 | Max acceptable ASR per category (the FCA impact-tolerance numbers). |
+| [`build_report`](../src/safety_engine/report.py#L71-L107) | 71–107 | Worst-ASR-per-category across stages → [`CategoryVerdict`](../src/safety_engine/report.py#L35-L43); the **`not_evidenced` rule** (a control whose stages didn't all run is never `pass`) lives at [89–99](../src/safety_engine/report.py#L89-L99). |
+| [`SafetyReport.overall_pass`](../src/safety_engine/report.py#L64-L68) | 64–68 | Gate-ok **and** no control failing → the boolean `run.py` turns into the exit code. |
+| [`write_json`](../src/safety_engine/report.py#L110-L132) / [`write_markdown`](../src/safety_engine/report.py#L135-L177) | 110–177 | The machine + human evidence artifacts (the latter doubles as an FCA self-assessment, with a remediation list). |
+
+### 8. Public API — [`src/safety_engine/__init__.py`](../src/safety_engine/__init__.py)
+
+The [`__all__`](../src/safety_engine/__init__.py#L14-L29) surface a host imports — note it
+re-exports `run`, `build_target`, and the stage runners but **no app/agent code**
+(the key invariant).
+
+### 9. The garak sidecar — [`garak/Dockerfile`](../garak/Dockerfile) + [`garak/azure.py`](../garak/azure.py)
+
+garak is **openai-v0-bound** and can't share the engine's venv, so it runs as an
+isolated container whose JSONL report the engine ingests.
+
+- **Dockerfile** — the [why-Docker rationale + run commands](../garak/Dockerfile#L1-L39) (header), [CPU-only torch + `garak==0.9.0.9`](../garak/Dockerfile#L43-L46), [forced UTF-8](../garak/Dockerfile#L48-L50), and the step that [installs the bundled Azure generator into garak's plugin package](../garak/Dockerfile#L52-L59) so `--model_type azure` resolves.
+- **azure.py** — [`AzureOpenAIGenerator`](../garak/azure.py#L71-L105): [`__init__`](../garak/azure.py#L76-L105) configures openai-v0 Azure mode and **skips the public-model allowlist**; [`_call_model`](../garak/azure.py#L107-L140) routes by **`engine=<deployment>`** and turns a content-filter 400 into a scored refusal ([`_is_content_filter`](../garak/azure.py#L60-L68), [`_CONTENT_FILTER_OUTPUT`](../garak/azure.py#L41-L49)).
+
+### 10. CI/CD workflow — [`.github/workflows/safety-trust.yml`](../.github/workflows/safety-trust.yml)
+
+Four jobs (see also the diagram, `docs/safety_trust_engine_cicd_pipeline.svg`, and the CI/CD section above):
+
+| Job | Lines | Role |
+| --- | --- | --- |
+| [triggers](../.github/workflows/safety-trust.yml#L3-L9) | 3–9 | PR · push(main) · nightly cron · dispatch. |
+| [`lint-and-test`](../.github/workflows/safety-trust.yml#L15-L27) | 15–27 | `uv sync` · `ruff` · `pytest`. |
+| [`demo-gate`](../.github/workflows/safety-trust.yml#L29-L52) | 29–52 | **Self-test**: runs `--demo` and asserts the gate blocks (exit 1 = success). |
+| [`safety-gate`](../.github/workflows/safety-trust.yml#L61-L79) | 61–79 | **Enforcing**: runs the gate against [`examples/garak.baseline.report.jsonl`](../examples/garak.baseline.report.jsonl); its exit code blocks the build (green within tolerance, red on a breach). |
+| [`live`](../.github/workflows/safety-trust.yml#L85-L124) | 85–124 | Nightly/dispatch: `uv sync --extra live`, build the garak sidecar, scan, full gate, upload evidence (needs `OPENAI_API_KEY`). |
+
+### 11. Supporting files
+
+- [`examples/garak.baseline.report.jsonl`](../examples/garak.baseline.report.jsonl) — the within-tolerance baseline evidence the `safety-gate` job enforces (edit it to a breach and the PR check goes red).
+- [`pyproject.toml`](../pyproject.toml) — `dependencies = []` (stdlib-only core); the `live` extra pulls `pyrit`, `inspect-ai`, `inspect-evals[agentdojo]`; `[tool.uv.build-backend]` sets `module-name = "safety_engine"`.
+- Tests — [`tests/test_demo_gate.py`](../tests/test_demo_gate.py) (whole pipeline on demo data), [`tests/test_parsers.py`](../tests/test_parsers.py) (garak + Inspect/AgentDojo parsers against realistic fixtures, incl. the zstd `.eval` and polarity cases), [`tests/test_providers.py`](../tests/test_providers.py) (provider dialects).
+
+---
+
 *Pair with `docs/REGULATORY_RESEARCH.md` (sources), `README.md` (install + run), `docs/pipeline.svg` (architecture), `docs/safety_trust_engine_cicd_pipeline.svg` (CI/CD), and `docs/HANDOVER.md` (current state + gotchas).*
