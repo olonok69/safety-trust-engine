@@ -302,8 +302,25 @@ def _inspect_task_name(data: dict) -> str:
     return ""
 
 
+class _EvalReadError(RuntimeError):
+    """An Inspect `.eval` archive could not be read (e.g. missing zstd codec)."""
+
+
 def _load_eval_zip(path: Path) -> tuple[str, list[dict]]:
-    """Read an Inspect `.eval` archive: `header.json` + one `samples/*.json` each."""
+    """Read an Inspect `.eval` archive: `header.json` + one `samples/*.json` each.
+
+    Inspect compresses `.eval` members with zstandard (ZIP method 93), which the
+    stdlib `zipfile` only handles via the `zipfile_zstd` monkeypatch -- a
+    transitive dependency of the `live` extra, so it is present wherever inspect
+    produced the file. We import it best-effort (the engine core stays
+    installable without it) and, if the codec is genuinely missing, raise rather
+    than return zero samples -- a compliance gate must never read an unparseable
+    log as "0 hits". Verified against inspect-ai 0.3.240.
+    """
+    try:
+        import zipfile_zstd  # noqa: F401  -- monkeypatches stdlib zipfile for zstd
+    except ImportError:
+        pass
     name = path.stem
     samples: list[dict] = []
     try:
@@ -323,6 +340,12 @@ def _load_eval_zip(path: Path) -> tuple[str, list[dict]]:
                     continue
                 if isinstance(sample, dict):
                     samples.append(sample)
+    except NotImplementedError as e:
+        raise _EvalReadError(
+            f"cannot decompress {path.name}: {e}. Inspect `.eval` files use zstd "
+            f"compression -- install the `live` extra (it pulls zipfile-zstd) or "
+            f"re-run inspect with `--log-format json`."
+        ) from e
     except (zipfile.BadZipFile, OSError):
         return name, []
     return name, samples
@@ -362,7 +385,10 @@ def _parse_agentdojo_logs(log_dir: Path, suites: str) -> StageResult:
     probes: list[ProbeResult] = []
     seen = interpreted = 0
     for log in logs:
-        name, samples = _load_inspect_samples(log)
+        try:
+            name, samples = _load_inspect_samples(log)
+        except _EvalReadError as e:
+            return StageResult(name=AGENTDOJO, ran=False, error=str(e))
         if not samples:
             continue
         outcomes = [o for o in (_agentdojo_outcome(s) for s in samples) if o is not None]

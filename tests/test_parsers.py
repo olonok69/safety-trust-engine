@@ -13,6 +13,8 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from safety_engine.compliance import AGENTDOJO, GARAK
 from safety_engine.stages import (
     _agentdojo_outcome,
@@ -179,6 +181,26 @@ def test_parse_agentdojo_eval_zip(tmp_path):
     _write_eval_zip(tmp_path / "run.eval", [_inspect_sample(False), _inspect_sample(True)])
     result = _parse_agentdojo_logs(tmp_path, suites="banking")
     assert result.ran is True
+    assert result.probes[0].attempts == 2 and result.probes[0].hits == 1
+
+
+def test_parse_agentdojo_eval_zip_zstd(tmp_path):
+    """Inspect compresses `.eval` members with zstd (method 93) -- the real format.
+
+    Skipped where zstd isn't available (e.g. the dev-only CI env); the `live`
+    extra pulls `zipfile-zstd`, which is also what makes the parser work.
+    """
+    pytest.importorskip("zipfile_zstd")
+    import zipfile_zstd  # noqa: F401  -- registers zipfile.ZIP_ZSTANDARD
+
+    path = tmp_path / "run.eval"
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_ZSTANDARD) as zf:
+        zf.writestr("header.json", json.dumps({"eval": {"task": "agentdojo"}}))
+        zf.writestr("samples/1_epoch_1.json", json.dumps(_inspect_sample(security=False)))
+        zf.writestr("samples/2_epoch_1.json", json.dumps(_inspect_sample(security=True)))
+    result = _parse_agentdojo_logs(tmp_path, suites="banking")
+    assert result.ran is True
+    assert result.probes[0].probe == "agentdojo"
     assert result.probes[0].attempts == 2 and result.probes[0].hits == 1
 
 
