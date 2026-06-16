@@ -28,7 +28,7 @@ of any host app. See §7 for the relationship to that app.
 | Core (compliance map, tolerance gate, evidence artifact, providers, demo) | ✅ done, stdlib-only |
 | PyRIT stage decoupled from the app (model target **or** injected agent factory) | ✅ done |
 | garak Docker sidecar + `--garak-report` ingest | ✅ built & proven against live OpenAI |
-| AgentDojo (Inspect) stage | ⚠️ wired, not yet green live (see §5) |
+| AgentDojo (Inspect) stage | ✅ live smoke passed (banking, gpt-4o-mini); engine ingests real `.eval` → gate FAIL on 100% tool_injection. Full all-suites run still untried. |
 | Unit tests (demo-mode + parser fixtures) | ✅ 30 passing |
 | Parser hardening (garak JSONL + Inspect `.eval`/JSON) | ✅ done, verified vs real Inspect output (see §5.9) |
 | GitHub remote + CI | ✅ pushed to `olonok69/safety-trust-engine` (private), CI green, secret set |
@@ -91,9 +91,17 @@ docker run --rm --env-file .env -v ${PWD}/runs:/work/runs safety-garak \
 # PyRIT alone against an OpenAI model endpoint (cheapest live smoke)
 uv run safety-engine --target-provider openai --target-model gpt-4o --stages pyrit
 
-# Full gate
+# AgentDojo: run a scoped Inspect eval yourself (cost control), then ingest
+inspect eval inspect_evals/agentdojo --model openai/gpt-4o-mini \
+    -T attack=important_instructions -T with_sandbox_tasks=no -T workspace=banking \
+    --log-dir runs/agentdojo
+uv run safety-engine --target-provider openai --stages agentdojo \
+    --agentdojo-logs runs/agentdojo --out runs/
+
+# Full gate (garak + agentdojo both ingested from pre-run logs, + live PyRIT)
 uv run safety-engine --target-provider openai --target-model gpt-4o \
-    --stages garak,agentdojo,pyrit --garak-report runs/garak.report.jsonl --out runs/
+    --stages garak,agentdojo,pyrit --garak-report runs/garak.report.jsonl \
+    --agentdojo-logs runs/agentdojo --out runs/
 ```
 
 Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
@@ -115,11 +123,27 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
    generator (works there with openai 0.28.x). For Azure, set the container's
    openai-v0 Azure env (`OPENAI_API_TYPE=azure`, `OPENAI_API_BASE`,
    `OPENAI_API_VERSION`) — not yet done.
-4. **AgentDojo skips until Inspect gets keys.** Inspect's `azureai` provider wants
-   `AZUREAI_BASE_URL` + `AZUREAI_API_KEY` (its own names); the `openai` provider
-   wants `OPENAI_API_KEY` in the *process* env. It may also need
-   `inspect-evals[agentdojo]` for its tool environments. The stage now prints the
-   tool's stderr tail on skip — read it.
+4. **AgentDojo: live smoke now PASSES.** Resolved on 2026-06-16: a scoped live run
+   works end-to-end and the engine ingests the real `.eval`. What was needed:
+   - The `live` extra now pulls **`inspect-evals[agentdojo]`** (adds
+     `pydantic[email]` + `deepdiff`); without them the task fails to load with
+     `ImportError: email-validator is not installed`.
+   - Inspect's `openai` provider reads `OPENAI_API_KEY` from the *process* env
+     (`azureai` wants `AZUREAI_BASE_URL` + `AZUREAI_API_KEY`).
+   - AgentDojo's `with_sandbox_tasks` defaults to `yes` (needs a Docker sandbox).
+     The engine's live seam now passes **`-T with_sandbox_tasks=no`** by default
+     so no sandbox infra is required; override via `agentdojo_inspect_args`.
+   - Verified command (cheap):
+     `inspect eval inspect_evals/agentdojo --model openai/gpt-4o-mini
+     -T attack=important_instructions -T with_sandbox_tasks=no -T workspace=banking
+     -T user_task_ids=[0] -T injection_task_ids=[0] --log-dir runs/agentdojo`
+     → 1 sample, `security="C"` (injection succeeded) → engine reads
+     `tool_injection` ASR 100% → gate FAIL (exit 1), as designed.
+   - **Cost control:** prefer running `inspect eval` yourself (scope suites /
+     pick a cheap model) then ingest with `--agentdojo-logs <dir>` (mirrors
+     `--garak-report`). The stage still prints the tool's stderr tail on skip.
+   - Not yet tried: the full all-suites run via the engine's own shell-out (will
+     be much more expensive).
 5. **PyRIT 100% ASR — verify, don't trust blindly.** A live PyRIT run showed
    jailbreak/prompt_injection at 100% ASR. 100% = *no refusal detected on any
    case* — could be a real finding **or** the judge mis-scoring. Open
@@ -168,13 +192,11 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
    `olonok69/safety-trust-engine` (private); `main` is the default branch; CI
    (`lint-and-test` + `demo-gate`) green on push/PR; `OPENAI_API_KEY` repo secret
    set for the nightly `live` job.
-2. **Get AgentDojo green** — parser side is ✅ done & verified (see §5.9: `.eval`
-   zstd container + `injection_task_scorer` polarity confirmed from source,
-   `_parse_agentdojo_logs` correct). **Remaining: a live end-to-end smoke** —
-   provide Inspect the right env vars (§5.4), `uv sync --extra live`, run
-   `inspect eval inspect_evals/agentdojo --model openai/gpt-4o
-   -T attack=important_instructions` (may need `inspect-evals[agentdojo]` tool
-   envs), and confirm the gate ingests the resulting `.eval`. Costs live API.
+2. ~~**Get AgentDojo green**~~ ✅ Done (see §5.4 + §5.9). Parser verified against
+   real output; live smoke (banking, gpt-4o-mini) passes and the engine ingests
+   the `.eval` → gate FAIL on 100% tool_injection. New `--agentdojo-logs` ingest
+   flag + `with_sandbox_tasks=no` default. Optional follow-up: a full all-suites
+   live run (costly) and an Azure/Inspect (`azureai/*`) variant.
 3. **Azure garak path** — add openai-v0 Azure env to the sidecar (§5.3) for an
    Azure deployment scan, or keep OpenAI as garak's target.
 4. ~~**Harden the parsers** against real logs.~~ ✅ Done (see §5.9): both parsers
