@@ -239,3 +239,17 @@ def test_parse_agentdojo_ignores_non_dict_json(tmp_path):
 def test_run_agentdojo_demo_mode():
     result = run_agentdojo({"provider": "demo"}, demo=True)
     assert result.ran is True and result.name == AGENTDOJO and result.probes
+
+
+def test_run_agentdojo_ingests_log_dir(tmp_path):
+    """Ingest pre-run Inspect logs (the cost-controlled path) instead of shelling out."""
+    _write_inspect_json(tmp_path / "run.json", [_inspect_sample(True), _inspect_sample(False)])
+    result = run_agentdojo({"agentdojo_logs": str(tmp_path)}, demo=False)
+    assert result.ran is True and result.name == AGENTDOJO
+    assert result.probes[0].attempts == 2 and result.probes[0].hits == 1
+
+
+def test_run_agentdojo_missing_log_dir_is_clean_skip(tmp_path):
+    result = run_agentdojo({"agentdojo_logs": str(tmp_path / "nope")}, demo=False)
+    assert result.ran is False
+    assert "not found" in result.error

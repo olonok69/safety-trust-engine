@@ -107,6 +107,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--garak-report", default=None, type=Path,
                     help="path to a garak JSONL report to ingest (e.g. from the "
                          "garak Docker sidecar) instead of shelling out to garak")
+    ap.add_argument("--agentdojo-logs", default=None, type=Path,
+                    help="path to a dir of Inspect .eval/.json logs to ingest "
+                         "(run `inspect eval inspect_evals/agentdojo` yourself "
+                         "first to control suites/cost) instead of shelling out")
     args = ap.parse_args(argv)
 
     valid = {GARAK, AGENTDOJO, PYRIT}
@@ -118,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     overrides = {}
     if args.garak_report:
         overrides["garak_report"] = str(args.garak_report)
+    if args.agentdojo_logs:
+        overrides["agentdojo_logs"] = str(args.agentdojo_logs)
     target = build_target(args.target_provider, args.target_model,
                           demo=args.demo, **overrides)
     print(f"Target: {target['provider']}/{target['model']}  "
