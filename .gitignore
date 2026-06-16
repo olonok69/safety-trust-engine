@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+uv.lock.bak
+
+# Secrets
+.env
+
+# Engine artifacts + sidecar reports
+runs/
+.safety_outputs/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

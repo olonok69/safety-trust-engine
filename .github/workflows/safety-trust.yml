@@ -1,0 +1,97 @@
+name: safety-trust
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *"   # nightly live red-team
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # PR / push smoke gate: lint + demo-mode tests. Zero keys, stdlib only.
+  # ---------------------------------------------------------------------------
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Sync (dev only -- no live deps needed for demo/tests)
+        run: uv sync
+      - name: Lint
+        run: uv run ruff check .
+      - name: Tests (demo-mode pipeline)
+        run: uv run pytest -q
+
+  demo-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - run: uv sync
+      - name: Demo gate must block (exit 1 is success here)
+        run: |
+          set +e
+          uv run python -m safety_engine.run --demo --out runs
+          code=$?
+          if [ "$code" -eq 1 ]; then
+            echo "::notice::Gate blocked the build as designed (exit 1)."
+            exit 0
+          fi
+          echo "::error::Expected the demo gate to fail (exit 1), got $code."
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-evidence
+          path: runs/
+
+  # ---------------------------------------------------------------------------
+  # Nightly / on-demand LIVE red-team. Requires secrets; uploads evidence on
+  # success AND failure. garak runs as a Docker sidecar; its report is ingested.
+  # ---------------------------------------------------------------------------
+  live:
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_CHAT_MODEL: gpt-4o
+      JUDGE_PROVIDER: openai
+      JUDGE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      JUDGE_OPENAI_MODEL: gpt-4o-mini
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Sync with live extra
+        run: uv sync --extra live
+
+      - name: Build garak sidecar image
+        run: docker build -t safety-garak garak
+
+      - name: garak scan (sidecar -> runs/garak.report.jsonl)
+        run: |
+          mkdir -p runs
+          docker run --rm -e OPENAI_API_KEY -v "$PWD/runs:/work/runs" safety-garak \
+            --model_type openai --model_name gpt-3.5-turbo \
+            --probes dan,encoding,promptinject --generations 5 \
+            --report_prefix /work/runs/garak
+
+      - name: Full gate (garak ingested + AgentDojo + PyRIT)
+        run: |
+          uv run python -m safety_engine.run \
+            --target-provider openai --target-model gpt-4o \
+            --stages garak,agentdojo,pyrit \
+            --garak-report runs/garak.report.jsonl --out runs/
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-evidence
+          path: runs/
