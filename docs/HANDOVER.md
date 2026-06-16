@@ -33,6 +33,7 @@ of any host app. See §7 for the relationship to that app.
 | Unit tests (demo-mode + parser fixtures) | ✅ 30 passing |
 | Parser hardening (garak JSONL + Inspect `.eval`/JSON) | ✅ done, verified vs real Inspect output (see §5.9) |
 | GitHub remote + CI | ✅ pushed to `olonok69/safety-trust-engine` (private), CI green, secret set |
+| Enforcing CI gate (`safety-gate` job) | ✅ blocks a PR on a tolerance breach; proven by demo PR #1 (see §5.11). Branch protection not yet required. |
 | GitHub Actions (`.github/workflows/safety-trust.yml`) | ✅ written, not yet run on GitHub (no remote) |
 | `.env` | ✅ copied from the app (gitignored) — has live keys |
 
@@ -204,15 +205,39 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
       filter ~60% → `encoding 60%` → gate FAIL. Engine ingests via
       `--target-provider azure --garak-report runs/garak-azure.report.jsonl`.
     - Build & run commands live in `garak/Dockerfile`'s header.
+11. **The CI gate now actually blocks PRs (`safety-gate` job).** There are three
+    PR/push jobs and they are easy to confuse:
+    - `lint-and-test` — ruff + pytest.
+    - `demo-gate` — a **self-test**: runs `--demo` (always breaches) and asserts the
+      gate blocks (exit 1 = job success). It proves the mechanism fails closed; it is
+      *not* a check on real evidence and is green on every PR.
+    - `safety-gate` — the **enforcing** check: runs the tolerance gate against
+      committed baseline evidence (`examples/garak.baseline.report.jsonl`) and lets the
+      engine's exit code decide. Green while the baseline is within tolerance; **red the
+      moment a change makes the evidence breach** (no keys — findings are ingested).
+    - **Positive case:** baseline within tolerance → exit 0 → green → mergeable.
+    - **Negative case:** proven by **demo PR #1** (`demo/gate-breach`), which regresses
+      the baseline to `jailbreak 20% > 10%` → `safety-gate` exits 1 → check **red**.
+      The PR is left open as the live demonstration; close it + delete the branch when
+      done (it must never be merged).
+    - **Caveat — visible ≠ blocking.** A red check shows, but GitHub still permits merge
+      (PR state `UNSTABLE`) unless a **branch-protection rule requires `safety-gate`** on
+      `main`. Adding that rule is the real deploy-blocking control — **not yet set**
+      (suggested next step). The token has the scope (`gh api` / repo settings).
+    - Diagram: `docs/safety_trust_engine_cicd_pipeline.svg` (now shows both outcomes).
 
 ---
 
 ## 6. Next steps (suggested order)
 
+0. **Require the `safety-gate` check in branch protection on `main`** so a breach
+   actually blocks merge (today it only shows red; PR state is `UNSTABLE`). See
+   §5.11. Also close demo PR #1 / delete `demo/gate-breach` once it has served as
+   the demonstration.
 1. ~~**Create the GitHub remote & push**~~ ✅ Done. Repo:
    `olonok69/safety-trust-engine` (private); `main` is the default branch; CI
-   (`lint-and-test` + `demo-gate`) green on push/PR; `OPENAI_API_KEY` repo secret
-   set for the nightly `live` job.
+   (`lint-and-test` + `demo-gate` + enforcing `safety-gate`) green on push/PR;
+   `OPENAI_API_KEY` repo secret set for the nightly `live` job.
 2. ~~**Get AgentDojo green**~~ ✅ Done (see §5.4 + §5.9). Parser verified against
    real output; live smoke (banking, gpt-4o-mini) passes and the engine ingests
    the `.eval` → gate FAIL on 100% tool_injection. New `--agentdojo-logs` ingest
