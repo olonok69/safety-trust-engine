@@ -1,5 +1,7 @@
 # Safety & Trust Engine
 
+[![safety-trust](https://github.com/olonok69/safety-trust-engine/actions/workflows/safety-trust.yml/badge.svg?branch=main)](https://github.com/olonok69/safety-trust-engine/actions/workflows/safety-trust.yml)
+
 An automated red-team **compliance gate** for LLM agents and models. It runs three
 adversarial stages, maps every finding to a named regulatory control, applies
 impact tolerances, and emits a single auditable evidence artifact. It exits
