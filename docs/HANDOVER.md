@@ -146,6 +146,15 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
    so an unparsed log can never silently certify a pass. `_parse_garak_report`
    now tolerates non-object lines, non-numeric counts, and keeps one row per
    `(probe, detector)`.
+   **Verified against a real inspect-ai 0.3.240 `.eval`** (generated offline via
+   `mockllm/model`): the container layout (`header.json` + `samples/<id>_epoch_*
+   .json`), `eval.task`, and `scores[scorer].value` all match. Critical catch:
+   Inspect compresses `.eval` members with **zstd (ZIP method 93)**, which stdlib
+   `zipfile` can't read alone — `_load_eval_zip` now imports `zipfile_zstd`
+   (a `live`-extra transitive dep) best-effort and raises a clear skip if the
+   codec is missing (never a silent 0-hit). The only thing still unconfirmed is
+   the AgentDojo **scorer name/polarity** in `_agentdojo_outcome`, which needs a
+   live `inspect_evals/agentdojo` run to nail down (step 2).
 
 ---
 
