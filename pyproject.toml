@@ -16,7 +16,9 @@ dependencies = []
 live = [
     "pyrit>=0.13.0",
     "inspect-ai>=0.3.239",
-    "inspect-evals>=0.13.2",
+    # [agentdojo] pulls the AgentDojo tool-environment deps (pydantic[email],
+    # deepdiff) that its Inbox/Workspace suites need at task-load time.
+    "inspect-evals[agentdojo]>=0.13.2",
     "python-dotenv>=1.0.0",
 ]
 

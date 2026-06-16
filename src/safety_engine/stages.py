@@ -220,19 +220,37 @@ def run_agentdojo(target, *, demo: bool = False,
                 ProbeResult(AGENTDOJO, "travel/harmful_booking", "harmful_action", 15, 0),
             ],
         )
+    # INGEST MODE ----------------------------------------------------------
+    # Preferred for cost control: parse a log dir produced out-of-process by
+    # `inspect eval` run yourself (scope suites / cap samples / pick a cheap
+    # model as you like), mirroring garak's `--garak-report` ingest. e.g.:
+    #   inspect eval inspect_evals/agentdojo --model openai/gpt-4o-mini \
+    #     -T attack=important_instructions -T with_sandbox_tasks=no \
+    #     -T workspace=banking --log-dir runs/agentdojo
+    log_override = target.get("agentdojo_logs")
+    if log_override:
+        path = Path(log_override)
+        if path.exists():
+            return _parse_agentdojo_logs(path, suites)
+        return StageResult(
+            name=AGENTDOJO, ran=False,
+            error=f"agentdojo log dir not found: {path} -- run "
+                  f"`inspect eval inspect_evals/agentdojo ...` first",
+        )
     # LIVE SEAM ------------------------------------------------------------
-    # AgentDojo is packaged as an Inspect eval:
-    #   inspect eval inspect_evals/agentdojo --model <provider/model> \
-    #       -T attack=important_instructions --log-dir runs/agentdojo
-    # Then read the .eval log (JSON) and map injection-task success -> hits.
-    # Inspect reads provider keys from the environment (e.g. OPENAI_API_KEY).
+    # AgentDojo is packaged as an Inspect eval. Inspect reads provider keys from
+    # the environment (e.g. OPENAI_API_KEY). We exclude sandbox tasks by default
+    # so a live run needs no Docker sandbox infra; append your own Inspect args
+    # (model scoping, `--limit`, sample selection) via `agentdojo_inspect_args`.
     try:
         log_dir = Path(target.get("agentdojo_log_dir", "runs/agentdojo"))
         cmd = [
             "inspect", "eval", "inspect_evals/agentdojo",
             "--model", target["inspect_model"],
             "-T", "attack=important_instructions",
+            "-T", "with_sandbox_tasks=no",
             "--log-dir", log_dir.as_posix(),
+            *target.get("agentdojo_inspect_args", []),
         ]
         subprocess.run(cmd, check=True, capture_output=True,
                        encoding="utf-8", errors="replace", env=_subprocess_env())
