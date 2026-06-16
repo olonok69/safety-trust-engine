@@ -149,15 +149,36 @@ Each run writes two files to `--out` (default `runs/`):
   self-assessment / DORA testing summary), with a remediation list of only the
   failing controls.
 
-## CI/CD
+## CI/CD — the gate as a PR check
 
-[`.github/workflows/safety-trust.yml`](.github/workflows/safety-trust.yml):
+[`.github/workflows/safety-trust.yml`](.github/workflows/safety-trust.yml) — see
+the diagram in [docs/safety_trust_engine_cicd_pipeline.svg](docs/safety_trust_engine_cicd_pipeline.svg).
 
-- **PR / push** — lint + demo-mode tests + a demo-gate step (asserts the gate
-  blocks). Fast, deterministic, no keys.
-- **Nightly / on-demand** — full live red-team against the model endpoint
-  (`OPENAI_API_KEY` secret); builds the garak sidecar, ingests its report. Uploads
-  the evidence artifact on success *and* failure.
+**On every PR / push to `main`** (no keys, runs anywhere) — three jobs:
+
+| Job | What it does |
+| --- | --- |
+| `lint-and-test` | `uv sync` · `ruff check` · `pytest` (demo-mode, stdlib only) |
+| `demo-gate` | **self-test of the mechanism** — runs `--demo` (which breaches on purpose) and asserts the gate *blocks* (exit 1 is the success condition). Not a check on real evidence. |
+| `safety-gate` | **the enforcing check** — runs the tolerance gate against committed baseline evidence ([`examples/garak.baseline.report.jsonl`](examples/garak.baseline.report.jsonl)) and lets the engine's exit code decide. No keys: findings are ingested, not generated. |
+
+What `safety-gate` does, end to end:
+
+- **Pass (positive case).** Baseline evidence is within every tolerance → gate
+  exits **0** → the check is **green** → the PR is mergeable. Steady state of `main`.
+- **Fail (negative case).** A change makes the evidence breach a tolerance (e.g.
+  `jailbreak` ASR 20% vs a 10% tolerance) → gate exits **1** → the check goes
+  **red**, naming the breaching category + a remediation line → the PR check fails.
+
+> A red check is always *visible*, but to actually **prevent the merge** you must
+> *require* the `safety-gate` check in **branch protection** on `main` (otherwise
+> the PR shows as `UNSTABLE` but merge is still allowed). That branch-protection
+> rule is the deploy-blocking control.
+
+**Nightly cron / manual dispatch** — the `live` job: full live red-team against the
+model endpoint (`OPENAI_API_KEY` secret); builds the garak sidecar, ingests its
+report, runs garak + AgentDojo + PyRIT, and uploads the evidence artifact on
+success *and* failure.
 
 ## Layout
 
@@ -171,8 +192,9 @@ safety-trust-engine/
 │   ├── pyrit_campaign.py  # decoupled PyRIT campaign (model target or injected agent)
 │   ├── dataset.py         # the PyRIT attack objectives
 │   └── run.py             # orchestrator + CLI + CI exit code
-├── garak/Dockerfile       # the isolated garak sidecar
-├── tests/                 # demo-mode pipeline tests (zero-config)
+├── garak/                 # the isolated garak sidecar (Dockerfile + azure.py generator)
+├── examples/              # baseline garak evidence the CI safety-gate enforces
+├── tests/                 # demo-mode + parser tests (zero-config)
 └── .github/workflows/safety-trust.yml
 ```
 

@@ -242,12 +242,24 @@ cat runs/st-*.md
 
 ### Slide 16 — The CI/CD pipeline (show `docs/safety_trust_engine_cicd_pipeline.svg`)
 
-The engine is wired into GitHub Actions (`.github/workflows/safety-trust.yml`) as two lanes:
+The engine is wired into GitHub Actions (`.github/workflows/safety-trust.yml`) as two lanes.
 
-- **Every PR / push to `main`** runs `lint-and-test` (`uv sync` · `ruff check` · `pytest` — 34 tests, demo-mode, stdlib only) and `demo-gate` (`safety-engine --demo`, which *must* exit 1, evidence uploaded). This is the required check; it needs no keys and runs anywhere.
-- **Nightly cron / manual dispatch** runs the `live` job: `uv sync --extra live`, `docker build` the garak sidecar, scan the model, run the full gate over garak + AgentDojo + PyRIT, and upload the evidence artifact. It reads the `OPENAI_API_KEY` repo secret.
+**Every PR / push to `main` (no keys, runs anywhere)** — three jobs:
 
-> 💡 **Speaker Note:** The split is the point — the offline lane keeps every commit honest for free; the live lane is the periodic, real-model assurance. Both write the same evidence artifact shape.
+1. `lint-and-test` — `uv sync` · `ruff check` · `pytest` (34 tests, demo-mode, stdlib only).
+2. `demo-gate` — a **self-test of the gate mechanism**: it runs `safety-engine --demo`, whose synthetic data breaches on purpose, and asserts the gate *blocks* (exit 1 is the success condition). This proves the gate fails closed; it is **not** an enforcing check on real evidence.
+3. `safety-gate` — the **enforcing check**. It runs the impact-tolerance gate against committed baseline evidence (`examples/garak.baseline.report.jsonl`) and lets the engine's exit code decide the job. No keys: findings are *ingested* from the fixture, not generated.
+
+The two outcomes, end to end:
+
+- **Positive (pass).** The baseline evidence is within every tolerance → the gate exits **0** → `safety-gate` is **green** → the PR is mergeable. This is the steady state of `main`.
+- **Negative (failure).** A change makes the evidence breach a tolerance — e.g. a regression that pushes `jailbreak` attack-success to 20% against a 10% tolerance → the gate exits **1** → `safety-gate` goes **red**, and the artifact names the breaching category and a remediation line. The PR check fails.
+
+> ⚠️ **One subtlety worth stating on stage:** a red check is always *visible*, but GitHub will still let you click merge unless a **branch-protection rule** *requires* the `safety-gate` check on `main`. Requiring it is what turns "you can see it failed" into "you cannot merge it." That rule is the actual deploy-blocking control.
+
+> 💡 **Speaker Note:** The split is the point — the offline lane keeps every commit honest for free (and `safety-gate` is the real PR gate); the live lane below is the periodic, real-model assurance. Both write the same evidence-artifact shape. If you want a live demo of the negative case, open a PR that worsens the baseline evidence and show the `safety-gate` check turn red.
+
+**Nightly cron / manual dispatch (real model, needs the `OPENAI_API_KEY` secret)** — the `live` job: `uv sync --extra live`, `docker build` the garak sidecar, scan the model, run the full gate over garak + AgentDojo + PyRIT, and upload the evidence artifact whether it passes or fails.
 
 ### Slide 16b — Lessons
 
