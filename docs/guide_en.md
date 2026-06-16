@@ -255,7 +255,7 @@ The two outcomes, end to end:
 - **Positive (pass).** The baseline evidence is within every tolerance → the gate exits **0** → `safety-gate` is **green** → the PR is mergeable. This is the steady state of `main`.
 - **Negative (failure).** A change makes the evidence breach a tolerance — e.g. a regression that pushes `jailbreak` attack-success to 20% against a 10% tolerance → the gate exits **1** → `safety-gate` goes **red**, and the artifact names the breaching category and a remediation line. The PR check fails.
 
-> ⚠️ **One subtlety worth stating on stage:** a red check is always *visible*, but GitHub will still let you click merge unless a **branch-protection rule** *requires* the `safety-gate` check on `main`. Requiring it is what turns "you can see it failed" into "you cannot merge it." That rule is the actual deploy-blocking control.
+> ⚠️ **One subtlety worth stating on stage:** a red check is always *visible*, but GitHub will still let you click merge unless a **branch-protection rule** *requires* the `safety-gate` check on `main`. Requiring it is what turns "you can see it failed" into "you cannot merge it." That rule is the actual deploy-blocking control (one-time repo setting; UI steps + `gh api` command are in the README under *"Make the gate actually block merges"*).
 
 > 💡 **Speaker Note:** The split is the point — the offline lane keeps every commit honest for free (and `safety-gate` is the real PR gate); the live lane below is the periodic, real-model assurance. Both write the same evidence-artifact shape. If you want a live demo of the negative case, open a PR that worsens the baseline evidence and show the `safety-gate` check turn red.
 

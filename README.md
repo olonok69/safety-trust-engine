@@ -170,10 +170,35 @@ What `safety-gate` does, end to end:
   `jailbreak` ASR 20% vs a 10% tolerance) → gate exits **1** → the check goes
   **red**, naming the breaching category + a remediation line → the PR check fails.
 
-> A red check is always *visible*, but to actually **prevent the merge** you must
-> *require* the `safety-gate` check in **branch protection** on `main` (otherwise
-> the PR shows as `UNSTABLE` but merge is still allowed). That branch-protection
-> rule is the deploy-blocking control.
+### Make the gate actually block merges (branch protection)
+
+A failing `safety-gate` is **visible** on the PR, but GitHub still allows the merge
+(PR state `UNSTABLE`) until you **require** the check. Requiring it in branch
+protection is the step that turns a red check into a hard deploy-blocking control —
+it is a one-time repo setting, not a code change.
+
+**UI:** Settings → Branches → add a rule for `main` → enable *Require status checks
+to pass before merging* → select **`safety-gate`** (and `lint-and-test`).
+
+**CLI** (`gh`):
+
+```bash
+gh api -X PUT repos/<owner>/safety-trust-engine/branches/main/protection \
+  --input - <<'JSON'
+{
+  "required_status_checks": {
+    "strict": true,
+    "checks": [{ "context": "safety-gate" }, { "context": "lint-and-test" }]
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
+JSON
+```
+
+Once set, a PR whose `safety-gate` is red cannot be merged into `main` — the
+impact-tolerance breach blocks the deployment.
 
 **Nightly cron / manual dispatch** — the `live` job: full live red-team against the
 model endpoint (`OPENAI_API_KEY` secret); builds the garak sidecar, ingests its
