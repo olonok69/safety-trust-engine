@@ -29,13 +29,18 @@ of any host app. See §7 for the relationship to that app.
 | PyRIT stage decoupled from the app (model target **or** injected agent factory) | ✅ done |
 | garak Docker sidecar + `--garak-report` ingest | ✅ built & proven against live OpenAI |
 | AgentDojo (Inspect) stage | ⚠️ wired, not yet green live (see §5) |
-| Unit tests (demo-mode, zero-config) | ✅ 13 passing |
+| Unit tests (demo-mode + parser fixtures) | ✅ 30 passing |
+| Parser hardening (garak JSONL + Inspect `.eval`/JSON) | ✅ done, fixture-tested (see §5.9) |
 | GitHub Actions (`.github/workflows/safety-trust.yml`) | ✅ written, not yet run on GitHub (no remote) |
 | `.env` | ✅ copied from the app (gitignored) — has live keys |
 
 **Verified locally (native Windows uv, own `.venv`):**
-`uv sync` · `uv run ruff check .` · `uv run pytest -q` (13 passed) ·
+`uv sync` · `uv run ruff check .` · `uv run pytest -q` (30 passed) ·
 `uv run safety-engine --demo` → exits 1 (gate blocks by design).
+
+> ⚠️ Use the project's own `.venv` (plain `uv run …`). If `VIRTUAL_ENV` points
+> elsewhere, uv prints a warning and ignores it — do **not** add `--active`, which
+> would target (and mutate) that other env.
 
 ---
 
@@ -128,6 +133,19 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
 8. **Skips are by design.** A stage that can't reach its tool/endpoint prints
    `SKIPPED (...)` and leaves its controls `not_evidenced` — coverage drops, the
    gate still runs. That is intentional honesty, not a bug.
+9. **Parsers are hardened but the AgentDojo *scorer* mapping is still the seam.**
+   `_parse_agentdojo_logs` now reads Inspect's native `.eval` (a ZIP of
+   `header.json` + `samples/*.json`) **and** `--log-format json`, and reads the
+   real `scores[scorer].value` nesting (the old code looked for a flat
+   `injection_success` key that never exists — it would have scored every real
+   run as 0 hits → a **false PASS**). The remaining unknown is *which* score
+   name/polarity means "injection succeeded": `_agentdojo_outcome` matches an
+   attack/defense vocabulary (`_AGENTDOJO_ATTACK_KEYS`/`_AGENTDOJO_DEFENSE_KEYS`)
+   — confirm/adjust these against a real `.eval`. Safety net: if samples are
+   present but **none** are scorable, the stage returns a SKIP (not a clean run),
+   so an unparsed log can never silently certify a pass. `_parse_garak_report`
+   now tolerates non-object lines, non-numeric counts, and keeps one row per
+   `(probe, detector)`.
 
 ---
 
@@ -141,8 +159,9 @@ Artifacts land in `runs/st-<ts>.{json,md}` (gitignored).
    `_parse_agentdojo_logs` matches a real `.eval` log (it's a thin seam).
 3. **Azure garak path** — add openai-v0 Azure env to the sidecar (§5.3) for an
    Azure deployment scan, or keep OpenAI as garak's target.
-4. **Harden the parsers** against real logs (`_parse_garak_report` is verified vs
-   garak 0.9.0.9; `_parse_agentdojo_logs` is not yet verified against a real run).
+4. ~~**Harden the parsers** against real logs.~~ ✅ Done (see §5.9): both parsers
+   hardened + fixture-tested. Still **confirm the AgentDojo scorer name/polarity**
+   in `_agentdojo_outcome` against a real `.eval` once step 2 produces one.
 5. **Decide the app's relationship** to this repo (§7): delete the embedded copy
    in `microsoft_agent_framework_app` and depend on this package, or keep both.
 6. **Optional:** publish (`uv build`) and/or push the garak image to a registry so
