@@ -125,13 +125,17 @@ def test_as_int_helper():
 # Inspect / AgentDojo log reduction
 # ---------------------------------------------------------------------------
 
-def _inspect_sample(security: bool) -> dict:
-    """An EvalSample whose AgentDojo scorer reports utility + security.
+def _inspect_sample(injection_succeeded: bool) -> dict:
+    """An EvalSample shaped exactly like AgentDojo's `injection_task_scorer`.
 
-    `security=False` means the agent was compromised -> the injection succeeded.
+    Score.value = {"utility": "C"/"I", "security": "C"/"I"}; `security()` returns
+    True ("C") when the injection executed correctly -- i.e. the attack SUCCEEDED
+    (HANDOVER §6.4, verified against inspect_evals). `utility` is the benign-task
+    signal and must not be read as an injection outcome.
     """
+    sec = "C" if injection_succeeded else "I"
     return {"id": 1, "epoch": 1,
-            "scores": {"agentdojo_scorer": {"value": {"utility": True, "security": security}}}}
+            "scores": {"injection_task_scorer": {"value": {"utility": "C", "security": sec}}}}
 
 
 def _write_inspect_json(path: Path, samples: list[dict], task: str = "inspect_evals/agentdojo"):
@@ -149,8 +153,15 @@ def _write_eval_zip(path: Path, samples: list[dict], task: str = "inspect_evals/
 
 
 def test_agentdojo_outcome_reads_nested_security_score():
-    assert _agentdojo_outcome(_inspect_sample(security=False)) is True   # compromised
-    assert _agentdojo_outcome(_inspect_sample(security=True)) is False   # defended
+    # security == "C" -> injection executed correctly -> attack succeeded (hit).
+    assert _agentdojo_outcome(_inspect_sample(injection_succeeded=True)) is True
+    assert _agentdojo_outcome(_inspect_sample(injection_succeeded=False)) is False
+
+
+def test_agentdojo_outcome_ignores_utility_only_score():
+    """A benign (user-task) run reports only `utility` -> no injection outcome."""
+    sample = {"scores": {"user_task_scorer": {"value": {"utility": "C"}}}}
+    assert _agentdojo_outcome(sample) is None
 
 
 def test_agentdojo_outcome_reads_attack_keyed_score():
@@ -166,19 +177,19 @@ def test_agentdojo_outcome_unrecognised_schema_is_none():
 
 def test_parse_agentdojo_json_log(tmp_path):
     _write_inspect_json(tmp_path / "run.json",
-                        [_inspect_sample(False), _inspect_sample(False), _inspect_sample(True)])
+                        [_inspect_sample(True), _inspect_sample(True), _inspect_sample(False)])
     result = _parse_agentdojo_logs(tmp_path, suites="banking")
     assert result.ran is True
     assert len(result.probes) == 1
     p = result.probes[0]
     assert p.category == "tool_injection"
-    assert p.attempts == 3 and p.hits == 2      # two compromised, one defended
+    assert p.attempts == 3 and p.hits == 2      # two injections succeeded, one defended
     assert p.probe == "inspect_evals/agentdojo"
 
 
 def test_parse_agentdojo_eval_zip(tmp_path):
     """The native `.eval` (zip) format must parse -- not just `--log-format json`."""
-    _write_eval_zip(tmp_path / "run.eval", [_inspect_sample(False), _inspect_sample(True)])
+    _write_eval_zip(tmp_path / "run.eval", [_inspect_sample(True), _inspect_sample(False)])
     result = _parse_agentdojo_logs(tmp_path, suites="banking")
     assert result.ran is True
     assert result.probes[0].attempts == 2 and result.probes[0].hits == 1
@@ -196,8 +207,8 @@ def test_parse_agentdojo_eval_zip_zstd(tmp_path):
     path = tmp_path / "run.eval"
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_ZSTANDARD) as zf:
         zf.writestr("header.json", json.dumps({"eval": {"task": "agentdojo"}}))
-        zf.writestr("samples/1_epoch_1.json", json.dumps(_inspect_sample(security=False)))
-        zf.writestr("samples/2_epoch_1.json", json.dumps(_inspect_sample(security=True)))
+        zf.writestr("samples/1_epoch_1.json", json.dumps(_inspect_sample(True)))
+        zf.writestr("samples/2_epoch_1.json", json.dumps(_inspect_sample(False)))
     result = _parse_agentdojo_logs(tmp_path, suites="banking")
     assert result.ran is True
     assert result.probes[0].probe == "agentdojo"
