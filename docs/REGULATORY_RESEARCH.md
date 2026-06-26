@@ -29,6 +29,12 @@ at once: the agent is a high-risk AI system (AI Act), an ICT asset of a financia
 entity (DORA), and a dependency of an important business service (FCA), while
 Bedrock itself is an ICT third party (DORA Chapter V).
 
+A US-domiciled deployment — or a UK/EU stack serving US users — has two further
+analogues: **NIST AI RMF** (the AI-system axis) and **federal model-risk
+management** (the financial axis). These are documented in §4.5 as *parallel
+lenses* read against the same evidence; neither is encoded in `compliance.py`,
+and so neither appears in the §6 matrix.
+
 ---
 
 ## 2. EU AI Act — Article 15 (and Article 55)
@@ -173,6 +179,82 @@ ready-made input to the firm's self-assessment.
 
 ---
 
+## 4.5 The US parallel — NIST AI RMF and federal model-risk management
+
+The engine encodes three regimes (§§2–4). For a US-domiciled deployment, two
+further instruments are the closest American analogues — one for the AI system,
+one for financial-sector model risk. They are documented here for completeness
+and as **parallel lenses**: neither is currently encoded in `compliance.py`, and
+so neither appears in the §6 matrix. The mapping principle still holds — the
+*same* evidence artifact can be read through these lenses without re-gathering it.
+
+### 4.5a NIST AI RMF — the EU AI Act analogue (AI-system axis)
+
+**Instrument:** NIST AI Risk Management Framework (AI RMF 1.0, NIST AI 100-1),
+published 26 January 2023, with the **Generative AI Profile** (NIST AI 600-1)
+released 26 July 2024.
+**Status:** voluntary US guidance from the National Institute of Standards and
+Technology (Department of Commerce). There is no statutory adoption requirement,
+no certification scheme, and no NIST enforcement authority — but it is the de
+facto operating layer beneath binding regimes, and US sector regulators (SEC,
+CFPB, FTC, FDA) increasingly reference it.
+
+The framework is organised into four functions — GOVERN, MAP, MEASURE, MANAGE.
+The engine's evidence sits in **MEASURE**, specifically:
+
+- **MEASURE 2.6** — the AI system is evaluated for potential for misuse and abuse.
+- **MEASURE 2.7** — AI system security and resilience are evaluated and
+  documented. This is the subcategory adversarial red-teaming most directly
+  exercises (and the one the deck's mapping slide cites).
+
+The Generative AI Profile (AI 600-1) defines twelve GAI-specific risk categories
+(including prompt-injection / information-security risks) and recommends
+red-teaming as a pre-deployment measure — the same activity the engine automates.
+
+**Relevance to the engine:** a parallel lens, not an encoded control. The same
+prompt-injection / jailbreak / tool-injection findings that evidence EU AI Act
+Art. 15(5) map onto MEASURE 2.6–2.7. Wiring NIST AI RMF (and the MIT AI Risk
+Repository) into `compliance.py` as additional `Control` rows is the natural next
+step.
+
+### 4.5b Federal model-risk management — the DORA + FCA analogue (financial axis)
+
+**Instrument:** US interagency model-risk management (MRM) guidance from the
+Federal Reserve, OCC and FDIC. The long-standing anchor was **SR 11-7** (Federal
+Reserve / OCC Bulletin 2011-12, April 2011; adopted by the FDIC via FIL-22-2017
+in June 2017). On **17 April 2026** the three agencies issued **revised
+interagency guidance** (Federal Reserve **SR 26-02** / OCC **Bulletin 2026-13**)
+that rescinds and replaces SR 11-7 with a more risk-based, principles-driven
+framework.
+
+**What it requires:** three pillars, unchanged in substance — **(1) sound
+development**, **(2) independent validation** (“effective challenge”, outcomes
+analysis, benchmarking), and **(3) governance** (model inventory, ongoing
+monitoring, documentation). These are precisely the activities a repeatable,
+evidenced, remediated red-team gate produces.
+
+**Scope nuance (important):** the April-2026 revision **explicitly excludes
+generative AI and agentic AI** from formal scope as “novel and rapidly
+evolving”, and signals a forthcoming RFI on AI/GenAI/agentic model risk. In
+practice, supervisors and internal audit already apply the MRM principles to LLM-
+and agent-based systems **by analogy**. So for an agentic system the MRM
+expectation is a supervisory analogy today, not a codified rule — the same
+honesty caveat as DORA TLPT (continuous assurance is not a formal exercise).
+
+**Relevance to the engine:** a parallel lens, not an encoded control. The gate's
+JSON + Markdown artifact is the validation-and-documentation evidence a model-risk
+reviewer asks for when MRM principles are applied to an agent. As with DORA's
+third-party pillar, the substantive obligations (model inventory, board
+governance, the firm's MRM policy) live in the institution's MRM process, not in
+the test run.
+
+> Scope note (US): NIST AI RMF is **voluntary guidance**; federal MRM guidance is
+> a **supervisory expectation** enforced through examination, not a statute with a
+> penalty schedule. As with the three encoded regimes, “evidence” here is
+> *technical* evidence a control was exercised — not a legal conformity opinion.
+
+---
+
 ## 5. The three libraries
 
 ### 5.1 garak (NVIDIA) — breadth-first scanner
@@ -261,6 +343,10 @@ still be hijacked through a tool result (AgentDojo) or coerced over several turn
 
 This matrix is the source of truth that `compliance.py` encodes in code.
 
+The US parallels in §4.5 (NIST AI RMF, federal MRM) are deliberately **not**
+encoded and so do not appear above; they are read-through lenses on the same
+evidence, and the candidate next additions to the mapping.
+
 ---
 
 ## References
@@ -277,6 +363,14 @@ This matrix is the source of truth that `compliance.py` encodes in code.
 **FCA PS21/3 / PRA SS1/21**
 - PS21/3 policy statement: <https://www.fca.org.uk/publications/policy-statements/ps21-3-building-operational-resilience>
 - FCA operational resilience hub: <https://www.fca.org.uk/firms/operational-resilience>
+
+**NIST AI RMF (NIST AI 100-1 / AI 600-1)**
+- AI RMF 1.0 overview: <https://www.nist.gov/itl/ai-risk-management-framework>
+- Generative AI Profile (NIST AI 600-1): <https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf>
+
+**US federal model-risk management (Fed · OCC · FDIC)**
+- SR 11-7, original 2011 guidance: <https://www.federalreserve.gov/supervisionreg/srletters/sr1107.htm>
+- Revised interagency guidance, 2026 — Fed SR 26-02: <https://www.federalreserve.gov/supervisionreg/srletters/SR2602.pdf> · OCC Bulletin 2026-13: <https://www.occ.gov/news-issuances/bulletins/2026/bulletin-2026-13.html>
 
 **Tools**
 - garak: <https://github.com/NVIDIA/garak> · <https://garak.ai/>
