@@ -36,13 +36,13 @@ The engine packages three adversarial tools behind one compliance gate, maps eve
 | Time | Section | Slides | Duration |
 |------|---------|--------|----------|
 | 0:00 | Opening & why a Safety & Trust engine | 1–3 | 6 min |
-| 0:06 | The compliance backdrop — three regimes | 4–6 | 9 min |
-| 0:15 | The three red-team libraries | 7–9 | 8 min |
-| 0:23 | Architecture — stages, mapper, gate | 10–11 | 6 min |
-| 0:29 | The mapping in code — `compliance.py` | 12 | 5 min |
-| 0:34 | Live demo — the gate blocks a merge | 13–15 | 7 min |
-| 0:41 | CI/CD, lessons & takeaways | 16–17 | 4 min |
-| 0:45 | Q&A | — | 5 min |
+| 0:06 | The compliance backdrop — three regimes + the US parallel | 4–7 | 10 min |
+| 0:16 | The three red-team libraries | 8–10 | 8 min |
+| 0:24 | Architecture — stages, mapper, gate | 11–12 | 6 min |
+| 0:30 | The mapping in code — `compliance.py` | 13 | 5 min |
+| 0:35 | Live demo — the gate blocks a merge | 14–16 | 7 min |
+| 0:42 | CI/CD, lessons & takeaways | 17–18 | 4 min |
+| 0:46 | Q&A | — | 5 min |
 
 ---
 
@@ -64,7 +64,7 @@ The engine is the **automated heart of a review gate**: technical evidence (prob
 
 ---
 
-## ⏱ 0:06 – 0:15 — The Compliance Backdrop: Three Regimes (Slides 4–6)
+## ⏱ 0:06 – 0:16 — The Compliance Backdrop: Three Regimes + the US Parallel (Slides 4–7)
 
 This is the spine of the talk's credibility. Keep each regime to ~3 minutes; the deep version with sources is in `docs/REGULATORY_RESEARCH.md` — point to it rather than reading it.
 
@@ -72,7 +72,7 @@ This is the spine of the talk's credibility. Keep each regime to ~3 minutes; the
 
 Article 15 requires high-risk AI systems to achieve appropriate **accuracy, robustness, and cybersecurity**, consistently across their lifecycle. Two sub-paragraphs do the heavy lifting for us: **15(4)** demands resilience to errors, faults, and feedback loops; **15(5)** demands resilience against unauthorised third parties altering a system's use, outputs, or performance by exploiting vulnerabilities — explicitly naming data poisoning and adversarial inputs. And **Article 55(1)(a)** obliges providers of general-purpose models with systemic risk to *conduct and document* adversarial testing.
 
-> 💡 **Speaker Note:** The word "document" in Art. 55 is the hook for later — our evidence artifact *is* the documentation. Flag it now, pay it off on slide 12.
+> 💡 **Speaker Note:** The word "document" in Art. 55 is the hook for later — our evidence artifact *is* the documentation. Flag it now, pay it off on slide 13.
 
 ### Slide 5 — DORA
 
@@ -84,13 +84,29 @@ DORA is built on five pillars; two matter here. The **testing pillar** (Articles
 
 The UK framing is the most intuitive of the three. Firms identify **important business services**, set an **impact tolerance** (the maximum tolerable disruption), and test their ability to stay within it under **severe but plausible** scenarios — then write a **self-assessment** evidencing resilience and remediation. The engineering translation is almost too clean: an agent is a dependency of an important business service, an adversarial campaign is a severe-but-plausible scenario, and **impact tolerance maps directly onto a maximum acceptable attack-success rate.**
 
-> 💡 **Speaker Note:** This is the conceptual bridge to the gate. Land the single sentence — *"impact tolerance is just a maximum attack-success rate"* — and the architecture on slide 10 will feel inevitable.
+> 💡 **Speaker Note:** This is the conceptual bridge to the gate. Land the single sentence — *"impact tolerance is just a maximum attack-success rate"* — and the architecture on slide 11 will feel inevitable.
+
+### Slide 7 — The US parallel (NIST AI RMF + federal model-risk guidance)
+
+If anyone in the room operates in the US — or serves US users from a UK/EU stack — they will ask where the American equivalents sit. There are two, and they map cleanly onto the structure you have just walked through: one for the **AI system**, one for **financial-sector model risk**.
+
+**NIST AI RMF — the EU AI Act analogue.** The **NIST AI Risk Management Framework** (AI RMF 1.0, January 2023, from the US National Institute of Standards and Technology) and its **Generative AI Profile** (NIST AI 600-1, July 2024) are the US robustness-and-red-teaming reference. The framework's **Measure** function is exactly what this engine automates: documented evaluation, adversarial testing, and continuous assurance with thresholds and owners. It is **voluntary** — there is no AI RMF "fine" — but it is increasingly the operating layer beneath binding regimes, and US sector regulators (SEC, CFPB, FTC, FDA) now reference it in their expectations.
+
+> 💡 **Speaker Note:** The honest framing for NIST: it is a *companion* framework, not a law. Teams use it as the internal operating model that produces the evidence a binding regime — the EU AI Act, or a US sector regulator — then asks to see. It is a natural fourth lens to add to `compliance.py`: the same prompt-injection finding that evidences AI Act 15(5) also maps to NIST's Measure function (MEASURE 2.7, security & resilience).
+
+**Fed · OCC · FDIC model-risk management — the DORA + FCA analogue.** For financial services specifically, the US supervisory expectation is **model-risk management (MRM)**. The long-standing anchor was **SR 11-7** (Federal Reserve / OCC, 2011; adopted by the FDIC in 2017), whose three pillars — **independent validation, ongoing monitoring, and documentation** — are precisely what a repeatable, evidenced, remediated red-team gate produces. Be current here: on **17 April 2026** the three agencies replaced SR 11-7 with revised, risk-based interagency guidance (**Fed SR 26-02 / OCC Bulletin 2026-13**). The catch worth naming out loud: the revision **explicitly puts generative and agentic AI out of formal scope** as "novel and rapidly evolving" — but supervisors and internal audit are already applying the same MRM principles to LLM- and agent-based systems **by analogy**, and an RFI on AI/GenAI/agentic model risk is expected.
+
+> 💡 **Speaker Note:** This is the same move you made for DORA TLPT on slide 5 — say the limitation before the audience does. *"Agentic AI is formally out of scope of the April-2026 MRM revision; supervisors apply its principles by analogy."* That candour buys credibility, and it makes the engine *more* useful, not less: validation-and-documentation evidence is exactly what a model-risk reviewer asks for when they extend MRM to your agent. *(This slide adds ~1 min; to hold a strict 45, compress one of the three regimes by a minute.)*
+
+**The US presence, in one line.** A Bedrock-based agent serving US users answers to both at once — NIST AI RMF as the voluntary evidence layer, federal MRM as the supervisory bar — and the **same gate artifact** is the red-teaming evidence NIST's Measure function wants *and* the validation/monitoring documentation the MRM pillars want. You gather it once; you read it through US lenses too.
+
+> 💡 **Speaker Note:** If asked "is this US-legally binding?" be precise: NIST AI RMF is **voluntary guidance**; federal MRM guidance is a **supervisory expectation** enforced through examination, not a statute with a penalty schedule. Neither replaces legal sign-off — the same scope note as `docs/REGULATORY_RESEARCH.md` and the Appendix A answer on legal compliance.
 
 ---
 
-## ⏱ 0:15 – 0:23 — The Three Red-Team Libraries (Slides 7–9)
+## ⏱ 0:16 – 0:24 — The Three Red-Team Libraries (Slides 8–10)
 
-### Slide 7 — Three tools, three blind spots
+### Slide 8 — Three tools, three blind spots
 
 The engine orchestrates three tools because each covers what the others miss. Use the table; spend a sentence on each.
 
@@ -104,7 +120,7 @@ The argument in one line: **a model that passes a garak scan can still be hijack
 
 > 💡 **Speaker Note:** garak and PyRIT the room may know; AgentDojo is usually the unknown. The thing to stress: AgentDojo ships as an **Inspect eval** (`inspect_evals/agentdojo`), so it plugs straight into the evaluation framework many teams already use — and was extended by the US AISI with the UK AISI. That pedigree matters to a regulated audience.
 
-### Slide 8 — How each stage reaches its target
+### Slide 9 — How each stage reaches its target
 
 A quiet but important design point: each stage speaks a different dialect, and `providers.py` is the single place that knows them.
 
@@ -112,7 +128,7 @@ A quiet but important design point: each stage speaks a different dialect, and `
 - **AgentDojo** runs as an Inspect eval; the engine shells out (or you run it yourself and ingest the `.eval` logs via `--agentdojo-logs`).
 - **PyRIT** runs in-process.
 
-### Slide 9 — The PyRIT carry-over, decoupled
+### Slide 10 — The PyRIT carry-over, decoupled
 
 PyRIT is the lineage's gift, but it has been **decoupled** from the source app. The standalone engine no longer imports any agent code. The PyRIT stage targets a system under test in one of two ways:
 
@@ -125,15 +141,15 @@ Two traps are worth saying out loud: PyRIT v0.13 renamed its core abstractions (
 
 ---
 
-## ⏱ 0:23 – 0:29 — Architecture: Stages, Mapper, Gate (Slides 10–11)
+## ⏱ 0:24 – 0:30 — Architecture: Stages, Mapper, Gate (Slides 11–12)
 
-### Slide 10 — The pipeline (show `docs/pipeline.svg`)
+### Slide 11 — The pipeline (show `docs/pipeline.svg`)
 
 Walk the diagram left to right and top to bottom. A **CI trigger or the CLI** fans out to the **three stages**, which run independently and each emit findings in one normalised shape: `ProbeResult(category, attempts, hits)`. Those findings feed the **compliance mapper**, then a single **tolerance gate** decides pass or fail — and either way an **evidence artifact** is written to `runs/`.
 
 > 💡 **Speaker Note:** The normalisation is the quiet hero. Because all three tools reduce to the same `(category, attempts, hits)` shape, the mapper and the gate never need to know which tool a finding came from. That is what makes adding a fourth tool later cheap.
 
-### Slide 11 — The gate as impact tolerance
+### Slide 12 — The gate as impact tolerance
 
 Each probe category carries a maximum acceptable attack-success rate (ASR). The defaults are stricter where the blast radius is larger — `harmful_action` at 0%, `tool_injection` and `data_leakage` at 5%, jailbreak/injection/encoding at 10%, toxicity at 15%. The gate fails the build if any category's worst-case ASR across all stages exceeds its tolerance. That is the FCA impact-tolerance mechanic, executable.
 
@@ -141,7 +157,7 @@ Each probe category carries a maximum acceptable attack-success rate (ASR). The 
 
 ---
 
-## ⏱ 0:29 – 0:34 — The Mapping in Code: `compliance.py` (Slide 12)
+## ⏱ 0:30 – 0:35 — The Mapping in Code: `compliance.py` (Slide 13)
 
 This is the intellectual core, and it deserves a code slide. `compliance.py` declares a list of `Control` objects — each one a single regulatory obligation tagged with the **stages that evidence it** and the **probe categories** most relevant to it. The mapper then applies one rule with two halves:
 
@@ -160,9 +176,9 @@ sed -n '1,40p' src/safety_engine/compliance.py
 
 ---
 
-## ⏱ 0:34 – 0:41 — Live Demo: The Gate Blocks a Merge (Slides 13–15)
+## ⏱ 0:35 – 0:42 — Live Demo: The Gate Blocks a Merge (Slides 14–16)
 
-### Slide 13 — Run it (offline)
+### Slide 14 — Run it (offline)
 
 The demo path is standard-library only — no keys, no installs, no model calls — so it runs anywhere, including on stage.
 
@@ -175,7 +191,7 @@ It runs all three stages, writes `runs/st-<ts>.{json,md}`, prints the per-catego
 
 > 💡 **Speaker Note:** Let the non-zero exit land before you explain it. A failing demo is the point — the gate is doing its job. "This is what blocks the merge."
 
-### Slide 14 — From demo to a real model (optional live segment)
+### Slide 15 — From demo to a real model (optional live segment)
 
 The same command takes a `--target-provider`. Flip one flag and every stage re-wires. To keep cost (and flakiness) down on stage, run the slow stages out-of-process and **ingest** their reports — exactly what the engine supports.
 
@@ -205,7 +221,7 @@ Three things to say while it runs:
 
 1. **One flag re-wires every stage.** `providers.py` is the single place that knows each tool's dialect — garak's `--model_type`, Inspect's `openai/<model>` or `azureai/<deployment>` string, and PyRIT's model target. Flip `--target-provider azure` / `google` / `bedrock` and the same run targets a different cloud.
 2. **Ingest beats re-running.** `--garak-report` and `--agentdojo-logs` let you run the slow/expensive stages once, on your terms (scoped suites, a cheap model, a cost cap), and feed the engine their evidence — instead of the engine shelling out to a full, pricey run.
-3. **Degrade, don't crash.** If a stage can't reach its endpoint it prints `SKIPPED (...)` and its controls come back `not_evidenced` — coverage drops, the gate still runs. That honesty is the same `not_evidenced` design from slide 12.
+3. **Degrade, don't crash.** If a stage can't reach its endpoint it prints `SKIPPED (...)` and its controls come back `not_evidenced` — coverage drops, the gate still runs. That honesty is the same `not_evidenced` design from slide 13.
 
 #### Azure, proven live — and a real finding
 
@@ -224,7 +240,7 @@ uv run safety-engine --target-provider azure --stages garak \
 
 Against deployment `gpt-4.1-mini`, the result is a genuinely useful story: **Azure's content filter blocks the plain DAN jailbreak (`jailbreak 0%`), but base64-encoded payloads slip past it ~60% of the time (`encoding 60%`)** — so the gate fails on `encoding`. The takeaway for the room: a content filter is necessary, not sufficient; encoding attacks route around it, and the gate catches exactly that.
 
-### Slide 15 — The finding, and the output artifact
+### Slide 16 — The finding, and the output artifact
 
 The category that fails the offline demo is `prompt_injection`, and the failing probe is `prompt-injection-tool` — a delayed-compliance case where the agent first refuses and then appends an override to a tool argument, and a naive refusal scorer mis-marks it. In a notebook that finding is invisible at the score level and only surfaces by reading the transcript. In the engine it surfaces as a **blocked build, a breaching category, and a remediation line in the artifact** — automatically, every run.
 
@@ -238,9 +254,9 @@ cat runs/st-*.md
 
 ---
 
-## ⏱ 0:41 – 0:45 — CI/CD, Lessons & Takeaways (Slides 16–17)
+## ⏱ 0:42 – 0:46 — CI/CD, Lessons & Takeaways (Slides 17–18)
 
-### Slide 16 — The CI/CD pipeline (show `docs/safety_trust_engine_cicd_pipeline.svg`)
+### Slide 17 — The CI/CD pipeline (show `docs/safety_trust_engine_cicd_pipeline.svg`)
 
 The engine is wired into GitHub Actions (`.github/workflows/safety-trust.yml`) as two lanes.
 
@@ -261,14 +277,14 @@ The two outcomes, end to end:
 
 **Nightly cron / manual dispatch (real model, needs the `OPENAI_API_KEY` secret)** — the `live` job: `uv sync --extra live`, `docker build` the garak sidecar, scan the model, run the full gate over garak + AgentDojo + PyRIT, and upload the evidence artifact whether it passes or fails.
 
-### Slide 16b — Lessons
+### Slide 17b — Lessons
 
 - **A red-team result is not evidence until it is mapped to a control, a threshold, and an artifact.** The hard part was never running the attacks; it was the compliance scaffolding around them.
 - **Coverage honesty beats a green dashboard.** `not_evidenced` is a first-class state. Skipping a stage must never look like passing it. The same instinct drove two parser fixes found only by checking against *real* tool output: an `.eval` schema mismatch and an inverted AgentDojo score polarity, each of which would otherwise have produced a silent **false PASS**.
 - **Normalise early.** Reducing three very different tools to `(category, attempts, hits)` is what lets the gate and the mapper stay simple.
 - **Provider-agnostic by construction.** A single `providers.py` maps `(provider, model)` to each tool's dialect, so one `--target-provider` flag re-wires all three stages.
 
-### Slide 17 — Three takeaways
+### Slide 18 — Three takeaways
 
 1. **Red-teaming is now a regulated, evidenced activity.** EU AI Act, DORA, and FCA all demand repeatable, documented adversarial testing — the same control, three vocabularies.
 2. **The gate, not the scan, is the deliverable.** A scan produces findings; an engine produces a pass/fail verdict, an audit artifact, and a remediation list.
@@ -297,6 +313,9 @@ A: For real coverage, yes — they test different things. But the engine runs wh
 
 **Q: Does the nightly CI run replace DORA threat-led penetration testing?**
 A: No. TLPT is an intelligence-led exercise by independent testers, at least every three years. The CI run is continuous assurance between those exercises — complementary, not a substitute.
+
+**Q: What about the US — are there equivalents?**
+A: Two, and the engine fits both without new code (slide 7). For the AI system, the **NIST AI Risk Management Framework** (AI RMF 1.0 + the Generative AI Profile, NIST AI 600-1) is the US robustness-and-red-teaming reference; its Measure function is what the gate automates. It is voluntary, but US sector regulators (SEC, CFPB, FTC, FDA) increasingly reference it. For financial services, the supervisory expectation is **model-risk management** from the Fed, OCC and FDIC — historically SR 11-7, replaced on 17 April 2026 by revised interagency guidance (SR 26-02 / OCC Bulletin 2026-13). Note that the 2026 revision puts generative and agentic AI formally *out of scope*, but supervisors apply its principles — validation, monitoring, documentation — by analogy, and an RFI on AI/GenAI/agentic model risk is expected. The same gate artifact serves both lenses; neither is a legal sign-off.
 
 **Q: How do we set the tolerances?**
 A: Per important business service and risk appetite. Start strict on high-impact categories (`harmful_action` at 0%, `tool_injection` at 5%) and tune from observed baselines. Override per run with `--fail-under category=rate`.
