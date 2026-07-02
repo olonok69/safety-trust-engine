@@ -163,13 +163,12 @@ the diagram in [docs/safety_trust_engine_cicd_pipeline.svg](docs/safety_trust_en
 | `demo-gate` | **optional failure demo** — runs only on manual dispatch, uses `--demo` with the default strict tolerances, and proves the gate blocks when a breach is present. |
 | `safety-gate` | **optional strict evidence demo** — runs only on manual dispatch against committed baseline evidence ([`examples/garak.baseline.report.jsonl`](examples/garak.baseline.report.jsonl)). |
 
-What `safety-gate` does, end to end:
+What `safety-gate` manual demo shows, end to end:
 
-- **Pass (positive case).** Baseline evidence is within every tolerance → gate
-  exits **0** → the check is **green** → the PR is mergeable. Steady state of `main`.
-- **Fail (negative case).** A change makes the evidence breach a tolerance (e.g.
-  `jailbreak` ASR 20% vs a 10% tolerance) → gate exits **1** → the check goes
-  **red**, naming the breaching category + a remediation line → the PR check fails.
+- **Strict evidence behavior.** If required control evidence is incomplete, the gate
+  exits **1** and reports `not_evidenced` controls.
+- **Tolerance breach behavior.** If evidence includes a category above tolerance,
+  the gate exits **1** and reports the breaching category + remediation line.
 
 ### Make the gate actually block merges and direct pushes (branch protection)
 
@@ -261,7 +260,7 @@ The failure demos (`demo-gate` and `safety-gate`) are still available from the
 workflow UI as manual runs, so you can show a blocked gate without making every
 PR merge path fail closed.
 
-**Nightly cron / manual dispatch** — the `live` job: full live red-team against the
+**Manual dispatch** — the `live` job: full live red-team against the
 model endpoint (`OPENAI_API_KEY` secret); builds the garak sidecar, ingests its
 report, runs garak + AgentDojo + PyRIT, and uploads the evidence artifact on
 success *and* failure.
