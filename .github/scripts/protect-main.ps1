@@ -1,6 +1,8 @@
 param(
     [string]$Repository,
-    [string]$Branch = "main"
+    [string]$Branch = "main",
+    [ValidateRange(0, 6)]
+    [int]$RequiredApprovals = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,7 +52,7 @@ $body = @{
     required_pull_request_reviews = @{
         dismiss_stale_reviews = $true
         require_code_owner_reviews = $false
-        required_approving_review_count = 1
+        required_approving_review_count = $RequiredApprovals
         require_last_push_approval = $false
     }
     allow_force_pushes = $false
@@ -64,4 +66,4 @@ $uri = "repos/$Repository/branches/$Branch/protection"
 
 Write-Host "Applying branch protection to $Repository/$Branch..."
 $body | gh api -X PUT $uri --input -
-Write-Host "Branch protection applied. Direct pushes to $Branch are now blocked by GitHub rules."
+Write-Host "Branch protection applied. Direct pushes to $Branch are blocked; required approvals: $RequiredApprovals."

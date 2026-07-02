@@ -180,7 +180,7 @@ deploy-blocking control and blocks direct pushes to `main`.
 **UI:** Settings → Branches → add a rule for `main` and enable:
 
 - *Require a pull request before merging*
-- *Require approvals* (at least 1)
+- *Require approvals*: **0** (disable mandatory approvals to avoid self-review deadlocks)
 - *Require status checks to pass before merging* and select **`lint-and-test`** and **`merge-demo-pass`**
 - *Include administrators* (so admins cannot bypass)
 - Optional but recommended: *Do not allow bypassing the above settings*
@@ -202,7 +202,7 @@ gh api -X PUT repos/<owner>/safety-trust-engine/branches/main/protection \
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
     "require_code_owner_reviews": false,
-    "required_approving_review_count": 1,
+    "required_approving_review_count": 0,
     "require_last_push_approval": false
   },
   "allow_force_pushes": false,
@@ -218,6 +218,12 @@ JSON
 
 ```powershell
 ./.github/scripts/protect-main.ps1
+```
+
+Optional approvals override:
+
+```powershell
+./.github/scripts/protect-main.ps1 -RequiredApprovals 1
 ```
 
 Optional explicit repo override:
