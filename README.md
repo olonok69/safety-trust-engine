@@ -154,7 +154,7 @@ Each run writes two files to `--out` (default `runs/`):
 [`.github/workflows/safety-trust.yml`](.github/workflows/safety-trust.yml) — see
 the diagram in [docs/safety_trust_engine_cicd_pipeline.svg](docs/safety_trust_engine_cicd_pipeline.svg).
 
-**On every PR / push to `main`** (no keys, runs anywhere) — three jobs:
+**On every PR** (no keys, runs anywhere) — three jobs:
 
 | Job | What it does |
 | --- | --- |
@@ -170,15 +170,20 @@ What `safety-gate` does, end to end:
   `jailbreak` ASR 20% vs a 10% tolerance) → gate exits **1** → the check goes
   **red**, naming the breaching category + a remediation line → the PR check fails.
 
-### Make the gate actually block merges (branch protection)
+### Make the gate actually block merges and direct pushes (branch protection)
 
 A failing `safety-gate` is **visible** on the PR, but GitHub still allows the merge
-(PR state `UNSTABLE`) until you **require** the check. Requiring it in branch
-protection is the step that turns a red check into a hard deploy-blocking control —
-it is a one-time repo setting, not a code change.
+(PR state `UNSTABLE`) until you **require** the check. Requiring checks and pull
+requests in branch protection is the step that turns a red check into a hard
+deploy-blocking control and blocks direct pushes to `main`.
 
-**UI:** Settings → Branches → add a rule for `main` → enable *Require status checks
-to pass before merging* → select **`safety-gate`** (and `lint-and-test`).
+**UI:** Settings → Branches → add a rule for `main` and enable:
+
+- *Require a pull request before merging*
+- *Require approvals* (at least 1)
+- *Require status checks to pass before merging* and select **`safety-gate`**, **`lint-and-test`**, **`demo-gate`**
+- *Include administrators* (so admins cannot bypass)
+- Optional but recommended: *Do not allow bypassing the above settings*
 
 **CLI** (`gh`):
 
@@ -188,17 +193,42 @@ gh api -X PUT repos/<owner>/safety-trust-engine/branches/main/protection \
 {
   "required_status_checks": {
     "strict": true,
-    "checks": [{ "context": "safety-gate" }, { "context": "lint-and-test" }]
+    "checks": [
+      { "context": "lint-and-test" },
+      { "context": "demo-gate" },
+      { "context": "safety-gate" }
+    ]
   },
   "enforce_admins": true,
-  "required_pull_request_reviews": null,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 1,
+    "require_last_push_approval": false
+  },
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_linear_history": false,
+  "required_conversation_resolution": true,
   "restrictions": null
 }
 JSON
 ```
 
-Once set, a PR whose `safety-gate` is red cannot be merged into `main` — the
-impact-tolerance breach blocks the deployment.
+**One-command script** (PowerShell):
+
+```powershell
+./.github/scripts/protect-main.ps1
+```
+
+Optional explicit repo override:
+
+```powershell
+./.github/scripts/protect-main.ps1 -Repository <owner>/<repo>
+```
+
+Once set, direct pushes to `main` are rejected and a PR whose required checks are
+red cannot be merged.
 
 **Nightly cron / manual dispatch** — the `live` job: full live red-team against the
 model endpoint (`OPENAI_API_KEY` secret); builds the garak sidecar, ingests its

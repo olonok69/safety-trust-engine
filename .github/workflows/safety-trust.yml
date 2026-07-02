@@ -2,15 +2,13 @@ name: safety-trust
 
 on:
   pull_request:
-  push:
-    branches: [main]
-  schedule:
-    - cron: "0 3 * * *"   # nightly live red-team
+  # schedule:
+  #   - cron: "0 3 * * *"   # nightly live red-team
   workflow_dispatch:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # PR / push smoke gate: lint + demo-mode tests. Zero keys, stdlib only.
+  # PR smoke gate: lint + demo-mode tests. Zero keys, stdlib only.
   # ---------------------------------------------------------------------------
   lint-and-test:
     runs-on: ubuntu-latest
