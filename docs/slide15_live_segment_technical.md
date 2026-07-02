@@ -308,7 +308,7 @@ Pipeline checks are necessary but not sufficient: branch protection is what bloc
 Recommended rule for `main`:
 
 - require pull request before merging,
-- require at least 1 approval,
+- require 0 mandatory approvals (avoid self-review deadlocks),
 - require status checks `lint-and-test` and `merge-demo-pass`,
 - include administrators,
 - disable force pushes and deletions.
