@@ -22,6 +22,14 @@ The core orchestration entrypoint is [src/safety_engine/run.py](../src/safety_en
 | AgentDojo | Tool-using agent behavior under workspace and instruction injection | Whether tool/context injection causes unsafe disclosure or tool abuse |
 | PyRIT | Multi-turn adversarial objectives against the OpenAI target plus system prompt | Refusal behavior across the curated case battery in [src/safety_engine/dataset.py](../src/safety_engine/dataset.py#L26) |
 
+### Presenter quick steps
+
+1. Show the PR checks: `lint-and-test` and `merge-demo-pass`.
+2. Merge a clean PR with `gh pr merge <pr-number> --merge --delete-branch`.
+3. Open Actions and run `demo-gate` to show the strict fail-closed path.
+4. Open Actions and run `safety-gate` to show the evidence-based failure path.
+5. Explain that direct pushes to `main` are blocked by branch protection.
+
 ---
 
 ## 2) The exact demo commands
@@ -216,7 +224,7 @@ This workflow uses the same engine, but splits it into three operational modes:
 
 ### A) `lint-and-test`
 
-This job runs on every PR and push to `main`.
+This job runs on every PR.
 
 - `actions/checkout@v4`: fetch the repository.
 - `astral-sh/setup-uv@v5`: install the requested Python toolchain and `uv`.
@@ -292,6 +300,143 @@ The YAML is intentionally layered:
 - `live` exercises the expensive, secret-backed path on a schedule.
 
 That separation keeps PR feedback fast, preserves an enforcing check, and still gives you a realistic end-to-end live test.
+
+### F) Protected-main rule (no direct pushes)
+
+Pipeline checks are necessary but not sufficient: branch protection is what blocks direct pushes to `main`.
+
+Recommended rule for `main`:
+
+- require pull request before merging,
+- require 0 mandatory approvals (avoid self-review deadlocks),
+- require status checks `lint-and-test` and `merge-demo-pass`,
+- include administrators,
+- disable force pushes and deletions.
+
+With this rule, engineers cannot push directly to `main`; they must merge via PR with green required checks.
+
+### G) PR merge demo: one success, one failure
+
+Use these two scenarios to show the branch protection working in real life.
+
+#### Success case: merge a clean PR
+
+1. Open a PR from a feature branch that only changes non-policy code or docs.
+2. Wait for `lint-and-test` and `merge-demo-pass` to go green.
+3. Approve the PR once.
+4. Merge with the GitHub UI or:
+
+```powershell
+gh pr merge <pr-number> --merge --delete-branch
+```
+
+Expected result: the merge succeeds because all required checks are green and branch protection is satisfied.
+
+#### Failure case: attempt to merge a red PR
+
+1. Run the manual `demo-gate` workflow dispatch or open a PR that deliberately tightens the demo tolerances.
+2. Let the gate fail.
+3. Observe the red check and, if the failing check is required, the merge is blocked.
+
+Expected result: GitHub blocks the merge because the required check is red, and direct push to `main` is also rejected by branch protection.
+
+This is the clearest live demo of the control: one PR passes through the gate, one PR is stopped at the gate.
+
+### H) Exact GitHub Actions sequence for the demo
+
+Use this as the narrated click-path while you present.
+
+#### Green PR merge sequence
+
+1. Push a feature branch with a harmless doc or code change.
+2. Open a PR into `main`.
+3. Wait for `lint-and-test` to pass.
+4. Wait for `merge-demo-pass` to pass.
+5. Show the branch protection summary on the PR.
+6. Merge the PR from the GitHub UI or with `gh pr merge <pr-number> --merge --delete-branch`.
+
+#### Red manual failure sequence
+
+1. Open the Actions tab.
+2. Run `demo-gate` manually to show the strict demo failing closed.
+3. Or run `safety-gate` manually to show the baseline evidence check failing when evidence is incomplete.
+4. Point out the red job status and the artifact path in the run output.
+
+#### Why this split matters
+
+- The PR path stays mergeable because it uses the passing demo job.
+- The failure path still exists for presentations and audits, but it is manual-only so it does not block every PR by design.
+- Direct pushes to `main` are still blocked by branch protection.
+
+### I) Concrete pass/fail examples you can run today
+
+Use these examples to explain pipeline behavior clearly during review:
+
+| Example | Command/job | Expected result | Why |
+| --- | --- | --- | --- |
+| PASS example (quality gate) | `lint-and-test` (`uv run ruff check .` + `uv run pytest -q`) | PASS | Code quality and tests pass with no model keys required. |
+| PASS example (green merge demo) | `merge-demo-pass` (`uv run python -m safety_engine.run --demo --out runs --fail-under prompt_injection=0.20 tool_injection=0.20`) | PASS | The demo battery is still the same, but the relaxed tolerances let the merge path succeed. |
+| FAIL example (strict evidence policy) | Manual `demo-gate` / `safety-gate` workflow dispatch | FAIL (exit `1`) | Under strict control policy, the demo or incomplete evidence path fails closed. |
+
+The last row is an important nuance: category tolerances can be within threshold while overall still fails because control evidence is incomplete.
+
+### J) Stage-by-stage internals of the pipeline
+
+This section describes what each stage does with inputs, transformation, and outputs.
+
+#### Stage 1: garak
+
+- Entry point: [src/safety_engine/stages.py](../src/safety_engine/stages.py#L110)
+- Input paths:
+  - ingest mode from `target.garak_report`
+  - or live shell-out mode when no report path is provided
+- Parser: [src/safety_engine/stages.py](../src/safety_engine/stages.py#L164)
+- Transformation:
+  - read JSONL `eval` entries
+  - map tool-specific probe names into normalized categories
+  - emit `ProbeResult(category, attempts, hits)` rows
+- Output:
+  - `StageResult(ran=True, probes=[...])` when parsed successfully
+  - `StageResult(ran=False, error=...)` on parse/runtime failure
+
+#### Stage 2: AgentDojo
+
+- Entry point: [src/safety_engine/stages.py](../src/safety_engine/stages.py#L210)
+- Input paths:
+  - ingest mode from `target.agentdojo_logs`
+  - or Inspect shell-out mode when logs are not pre-generated
+- Parser: [src/safety_engine/stages.py](../src/safety_engine/stages.py#L399)
+- Transformation:
+  - load `.eval` or `.json` samples
+  - classify scorer outcomes with tool-specific polarity handling
+  - normalize into `tool_injection` probes with attempts/hits
+- Output:
+  - same normalized `StageResult` contract as garak
+
+#### Stage 3: PyRIT
+
+- Entry point: [src/safety_engine/stages.py](../src/safety_engine/stages.py#L440)
+- Campaign engine: [src/safety_engine/pyrit_campaign.py](../src/safety_engine/pyrit_campaign.py#L146)
+- Input:
+  - provider-derived target model
+  - default objective battery from [src/safety_engine/dataset.py](../src/safety_engine/dataset.py#L26)
+- Transformation:
+  - run multi-turn adversarial campaign per objective
+  - score refusals versus non-refusals
+  - normalize into `ProbeResult` rows by category
+- Output:
+  - `StageResult` with per-category attempts/hits for gate evaluation
+
+#### Aggregation and gate
+
+- Aggregator/report builder: [src/safety_engine/report.py](../src/safety_engine/report.py#L71)
+- Control map: [src/safety_engine/compliance.py](../src/safety_engine/compliance.py#L56)
+- Exit policy:
+  - category verdicts compared with tolerances
+  - control verdicts require evidence and pass status
+  - process exit derived from overall pass in [src/safety_engine/run.py](../src/safety_engine/run.py#L132)
+
+In short, each stage is independently pluggable, but all are forced into one normalized schema before policy is applied.
 
 ---
 
