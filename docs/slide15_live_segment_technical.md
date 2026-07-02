@@ -22,6 +22,14 @@ The core orchestration entrypoint is [src/safety_engine/run.py](../src/safety_en
 | AgentDojo | Tool-using agent behavior under workspace and instruction injection | Whether tool/context injection causes unsafe disclosure or tool abuse |
 | PyRIT | Multi-turn adversarial objectives against the OpenAI target plus system prompt | Refusal behavior across the curated case battery in [src/safety_engine/dataset.py](../src/safety_engine/dataset.py#L26) |
 
+### Presenter quick steps
+
+1. Show the PR checks: `lint-and-test` and `merge-demo-pass`.
+2. Merge a clean PR with `gh pr merge <pr-number> --merge --delete-branch`.
+3. Open Actions and run `demo-gate` to show the strict fail-closed path.
+4. Open Actions and run `safety-gate` to show the evidence-based failure path.
+5. Explain that direct pushes to `main` are blocked by branch protection.
+
 ---
 
 ## 2) The exact demo commands
@@ -301,7 +309,7 @@ Recommended rule for `main`:
 
 - require pull request before merging,
 - require at least 1 approval,
-- require status checks `lint-and-test`, `demo-gate`, and `safety-gate`,
+- require status checks `lint-and-test` and `merge-demo-pass`,
 - include administrators,
 - disable force pushes and deletions.
 
@@ -314,7 +322,7 @@ Use these two scenarios to show the branch protection working in real life.
 #### Success case: merge a clean PR
 
 1. Open a PR from a feature branch that only changes non-policy code or docs.
-2. Wait for `lint-and-test`, `demo-gate`, and `safety-gate` to go green.
+2. Wait for `lint-and-test` and `merge-demo-pass` to go green.
 3. Approve the PR once.
 4. Merge with the GitHub UI or:
 
@@ -326,13 +334,39 @@ Expected result: the merge succeeds because all required checks are green and br
 
 #### Failure case: attempt to merge a red PR
 
-1. Open a PR that causes one required check to fail, or deliberately leave the baseline evidence outside tolerance.
-2. Let `safety-gate` fail.
-3. Try to merge the PR.
+1. Run the manual `demo-gate` workflow dispatch or open a PR that deliberately tightens the demo tolerances.
+2. Let the gate fail.
+3. Observe the red check and, if the failing check is required, the merge is blocked.
 
 Expected result: GitHub blocks the merge because the required check is red, and direct push to `main` is also rejected by branch protection.
 
 This is the clearest live demo of the control: one PR passes through the gate, one PR is stopped at the gate.
+
+### J) Exact GitHub Actions sequence for the demo
+
+Use this as the narrated click-path while you present.
+
+#### Green PR merge sequence
+
+1. Push a feature branch with a harmless doc or code change.
+2. Open a PR into `main`.
+3. Wait for `lint-and-test` to pass.
+4. Wait for `merge-demo-pass` to pass.
+5. Show the branch protection summary on the PR.
+6. Merge the PR from the GitHub UI or with `gh pr merge <pr-number> --merge --delete-branch`.
+
+#### Red manual failure sequence
+
+1. Open the Actions tab.
+2. Run `demo-gate` manually to show the strict demo failing closed.
+3. Or run `safety-gate` manually to show the baseline evidence check failing when evidence is incomplete.
+4. Point out the red job status and the artifact path in the run output.
+
+#### Why this split matters
+
+- The PR path stays mergeable because it uses the passing demo job.
+- The failure path still exists for presentations and audits, but it is manual-only so it does not block every PR by design.
+- Direct pushes to `main` are still blocked by branch protection.
 
 ### F) Concrete pass/fail examples you can run today
 
@@ -341,8 +375,8 @@ Use these examples to explain pipeline behavior clearly during review:
 | Example | Command/job | Expected result | Why |
 | --- | --- | --- | --- |
 | PASS example (quality gate) | `lint-and-test` (`uv run ruff check .` + `uv run pytest -q`) | PASS | Code quality and tests pass with no model keys required. |
-| PASS example (intentional block test) | `demo-gate` wrapper around `uv run python -m safety_engine.run --demo --out runs` | PASS job when engine exits `1` | This job is designed to prove fail-closed behavior; block is expected and converted to job success. |
-| FAIL example (strict evidence policy) | Current `safety-gate` command in YAML | FAIL (exit `1`) | Under strict control policy, garak-only evidence leaves other controls `not_evidenced`, so overall result is fail. |
+| PASS example (green merge demo) | `merge-demo-pass` (`uv run python -m safety_engine.run --demo --out runs --fail-under prompt_injection=0.20 tool_injection=0.20`) | PASS | The demo battery is still the same, but the relaxed tolerances let the merge path succeed. |
+| FAIL example (strict evidence policy) | Manual `demo-gate` / `safety-gate` workflow dispatch | FAIL (exit `1`) | Under strict control policy, the demo or incomplete evidence path fails closed. |
 
 The last row is an important nuance: category tolerances can be within threshold while overall still fails because control evidence is incomplete.
 
