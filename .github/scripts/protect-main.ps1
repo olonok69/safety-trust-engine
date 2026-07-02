@@ -38,8 +38,7 @@ $body = @{
         strict = $true
         checks = @(
             @{ context = "lint-and-test" },
-            @{ context = "demo-gate" },
-            @{ context = "safety-gate" }
+            @{ context = "merge-demo-pass" }
         )
     }
     enforce_admins = $true
