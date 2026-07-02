@@ -64,7 +64,8 @@ class SafetyReport:
     @property
     def overall_pass(self) -> bool:
         gate_ok = all(v.within for v in self.category_verdicts)
-        controls_ok = all(v.status != "fail" for v in self.control_verdicts)
+        # Strict policy: a run only passes if every control is evidenced and passes.
+        controls_ok = all(v.status == "pass" for v in self.control_verdicts)
         return gate_ok and controls_ok
 
 

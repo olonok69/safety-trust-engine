@@ -113,10 +113,6 @@ async def run_campaign(objective_target: Any,
         PromptSendingAttack,
     )
     from pyrit.score import SelfAskRefusalScorer
-    from pyrit.setup import IN_MEMORY, initialize_pyrit_async
-
-    await initialize_pyrit_async(IN_MEMORY)
-
     refusal_scorer = SelfAskRefusalScorer(chat_target=_build_judge_target())
     attack = PromptSendingAttack(
         objective_target=objective_target,
@@ -143,6 +139,18 @@ async def run_campaign(objective_target: Any,
     return results
 
 
+async def _initialize_pyrit_memory() -> None:
+    """Initialize PyRIT central memory before constructing prompt targets.
+
+    In PyRIT >=0.14, some targets read CentralMemory during construction. If the
+    target is built before `initialize_pyrit_async(IN_MEMORY)`, PyRIT raises:
+    "Central memory instance has not been set".
+    """
+    from pyrit.setup import IN_MEMORY, initialize_pyrit_async
+
+    await initialize_pyrit_async(IN_MEMORY)
+
+
 def run_campaign_sync(target: dict, *,
                       target_factory: Callable[[], Any] | None = None,
                       cases: tuple[RedTeamCase, ...] = CASES) -> list[dict[str, Any]]:
@@ -157,6 +165,7 @@ def run_campaign_sync(target: dict, *,
     provider via `build_pyrit_target` (red-team a model endpoint).
     """
     _load_dotenv_best_effort()
+    asyncio.run(_initialize_pyrit_memory())
     objective_target = target_factory() if target_factory else build_pyrit_target(target)
     per_case = asyncio.run(run_campaign(objective_target, cases))
 
