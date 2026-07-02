@@ -44,6 +44,7 @@ def test_no_stage_means_not_evidenced_not_pass():
     report = build_report("st-test", {"provider": "demo"}, garak_only)
     statuses = {v.status for v in report.control_verdicts}
     assert "not_evidenced" in statuses
+    assert report.overall_pass is False
     assert all(v.status != "pass" or set(v.control.stages).issubset({GARAK})
                for v in report.control_verdicts)
 
