@@ -154,13 +154,14 @@ Each run writes two files to `--out` (default `runs/`):
 [`.github/workflows/safety-trust.yml`](.github/workflows/safety-trust.yml) — see
 the diagram in [docs/safety_trust_engine_cicd_pipeline.svg](docs/safety_trust_engine_cicd_pipeline.svg).
 
-**On every PR** (no keys, runs anywhere) — three jobs:
+**On every PR** (no keys, runs anywhere) — two required jobs plus one optional demo job:
 
 | Job | What it does |
 | --- | --- |
 | `lint-and-test` | `uv sync` · `ruff check` · `pytest` (demo-mode, stdlib only) |
-| `demo-gate` | **self-test of the mechanism** — runs `--demo` (which breaches on purpose) and asserts the gate *blocks* (exit 1 is the success condition). Not a check on real evidence. |
-| `safety-gate` | **the enforcing check** — runs the tolerance gate against committed baseline evidence ([`examples/garak.baseline.report.jsonl`](examples/garak.baseline.report.jsonl)) and lets the engine's exit code decide. No keys: findings are ingested, not generated. |
+| `merge-demo-pass` | **green merge demo** — runs `--demo` with relaxed tolerances so the gate passes and the PR can merge when protected checks are green. |
+| `demo-gate` | **optional failure demo** — runs only on manual dispatch, uses `--demo` with the default strict tolerances, and proves the gate blocks when a breach is present. |
+| `safety-gate` | **optional strict evidence demo** — runs only on manual dispatch against committed baseline evidence ([`examples/garak.baseline.report.jsonl`](examples/garak.baseline.report.jsonl)). |
 
 What `safety-gate` does, end to end:
 
@@ -181,7 +182,7 @@ deploy-blocking control and blocks direct pushes to `main`.
 
 - *Require a pull request before merging*
 - *Require approvals* (at least 1)
-- *Require status checks to pass before merging* and select **`safety-gate`**, **`lint-and-test`**, **`demo-gate`**
+- *Require status checks to pass before merging* and select **`lint-and-test`** and **`merge-demo-pass`**
 - *Include administrators* (so admins cannot bypass)
 - Optional but recommended: *Do not allow bypassing the above settings*
 
@@ -194,10 +195,9 @@ gh api -X PUT repos/<owner>/safety-trust-engine/branches/main/protection \
   "required_status_checks": {
     "strict": true,
     "checks": [
-      { "context": "lint-and-test" },
-      { "context": "demo-gate" },
-      { "context": "safety-gate" }
-    ]
+        { "context": "lint-and-test" },
+        { "context": "merge-demo-pass" }
+      ]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
@@ -229,6 +229,37 @@ Optional explicit repo override:
 
 Once set, direct pushes to `main` are rejected and a PR whose required checks are
 red cannot be merged.
+
+To run the green merge demo locally:
+
+```bash
+uv run python -m safety_engine.run --demo --out runs --fail-under prompt_injection=0.20 tool_injection=0.20
+```
+
+### Demo runbook
+
+**Green merge path**
+
+1. Create a feature branch and open a PR into `main`.
+2. Let `lint-and-test` and `merge-demo-pass` finish green.
+3. Confirm the branch protection rule is satisfied.
+4. Merge the PR with GitHub UI or:
+
+```powershell
+gh pr merge <pr-number> --merge --delete-branch
+```
+
+**Red failure path**
+
+1. Open the Actions tab.
+2. Run the manual `demo-gate` workflow dispatch to show the strict demo failing closed, or run `safety-gate` manually to show the baseline evidence gate.
+3. Show the red job result and the blocking exit code.
+
+This gives you one live success case and one live failure case without making every PR fail by design.
+
+The failure demos (`demo-gate` and `safety-gate`) are still available from the
+workflow UI as manual runs, so you can show a blocked gate without making every
+PR merge path fail closed.
 
 **Nightly cron / manual dispatch** — the `live` job: full live red-team against the
 model endpoint (`OPENAI_API_KEY` secret); builds the garak sidecar, ingests its
