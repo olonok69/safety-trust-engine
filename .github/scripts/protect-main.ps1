@@ -10,8 +10,13 @@ function Get-RepositorySlug {
         [string]$RemoteUrl
     )
 
-    if ($RemoteUrl -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/.]+)') {
-        return "$($Matches.owner)/$($Matches.repo)"
+    if ($RemoteUrl -match '^https://github\.com/(?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?/?$|^git@github\.com:(?<owner_ssh>[^/]+)/(?<repo_ssh>[^/]+?)(?:\.git)?$') {
+        $owner = if ($Matches.owner) { $Matches.owner } else { $Matches.owner_ssh }
+        $repo = if ($Matches.repo) { $Matches.repo } else { $Matches.repo_ssh }
+        if (-not $owner -or -not $repo) {
+            throw "Unable to infer repository slug from origin remote: $RemoteUrl"
+        }
+        return "$owner/$repo"
     }
 
     throw "Unable to infer repository slug from origin remote: $RemoteUrl"
