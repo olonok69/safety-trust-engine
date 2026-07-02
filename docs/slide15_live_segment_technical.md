@@ -301,7 +301,7 @@ The YAML is intentionally layered:
 
 That separation keeps PR feedback fast, preserves an enforcing check, and still gives you a realistic end-to-end live test.
 
-### H) Protected-main rule (no direct pushes)
+### F) Protected-main rule (no direct pushes)
 
 Pipeline checks are necessary but not sufficient: branch protection is what blocks direct pushes to `main`.
 
@@ -315,7 +315,7 @@ Recommended rule for `main`:
 
 With this rule, engineers cannot push directly to `main`; they must merge via PR with green required checks.
 
-### I) PR merge demo: one success, one failure
+### G) PR merge demo: one success, one failure
 
 Use these two scenarios to show the branch protection working in real life.
 
@@ -342,7 +342,7 @@ Expected result: GitHub blocks the merge because the required check is red, and 
 
 This is the clearest live demo of the control: one PR passes through the gate, one PR is stopped at the gate.
 
-### J) Exact GitHub Actions sequence for the demo
+### H) Exact GitHub Actions sequence for the demo
 
 Use this as the narrated click-path while you present.
 
@@ -368,7 +368,7 @@ Use this as the narrated click-path while you present.
 - The failure path still exists for presentations and audits, but it is manual-only so it does not block every PR by design.
 - Direct pushes to `main` are still blocked by branch protection.
 
-### F) Concrete pass/fail examples you can run today
+### I) Concrete pass/fail examples you can run today
 
 Use these examples to explain pipeline behavior clearly during review:
 
@@ -380,7 +380,7 @@ Use these examples to explain pipeline behavior clearly during review:
 
 The last row is an important nuance: category tolerances can be within threshold while overall still fails because control evidence is incomplete.
 
-### G) Stage-by-stage internals of the pipeline
+### J) Stage-by-stage internals of the pipeline
 
 This section describes what each stage does with inputs, transformation, and outputs.
 
