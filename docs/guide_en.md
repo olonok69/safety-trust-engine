@@ -18,6 +18,18 @@ Senior AI/ML Engineer
 
 This guide accompanies a slide deck for a technical audience already familiar with LLMs, agents, and the basics of adversarial testing. The goal is **not** to explain what red-teaming is, but to show how to turn ad-hoc red-teaming into an **evidenced, regulation-mapped CI gate** — the layer that stands between "we ran some attacks once" and "we can prove, on every commit, that we stay within tolerance."
 
+### What is adversarial testing?
+
+Adversarial testing is the deliberate evaluation of an AI system with hostile, deceptive, or abuse-oriented inputs to measure how the system behaves under attack conditions.
+
+In this talk, it means:
+
+- simulating realistic attack techniques (jailbreaks, prompt injection, tool injection, data exfiltration attempts),
+- measuring outcomes as attempts vs successful compromises (ASR),
+- and turning those outcomes into repeatable controls with thresholds, evidence, and remediation.
+
+In short: functional tests ask "does it work as intended?"; adversarial tests ask "how does it fail when someone tries to break it?"
+
 The engine packages three adversarial tools behind one compliance gate, maps every finding to a named regulatory control, applies per-category impact tolerances, and emits a single auditable evidence artifact (JSON + Markdown). It exits non-zero on a tolerance breach, so it drops into CI/CD as a blocking step.
 
 ### Related artifacts in this repo
