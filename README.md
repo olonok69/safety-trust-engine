@@ -22,6 +22,10 @@ Findings from all three normalize to `ProbeResult(category, attempts, hits)`, so
 the compliance mapper and tolerance gate never need to know which tool produced a
 finding.
 
+Architecture overview:
+
+![Safety & Trust Engine architecture](docs/pipeline.svg)
+
 ## Quick start (offline, no keys)
 
 The demo path is **standard-library only** — no installs, no API keys, no model
@@ -153,6 +157,8 @@ Each run writes two files to `--out` (default `runs/`):
 
 [`.github/workflows/safety-trust.yml`](.github/workflows/safety-trust.yml) — see
 the diagram in [docs/safety_trust_engine_cicd_pipeline.svg](docs/safety_trust_engine_cicd_pipeline.svg).
+
+![Safety & Trust CI/CD pipeline](docs/safety_trust_engine_cicd_pipeline.svg)
 
 **On every PR** (no keys, runs anywhere) — two required jobs plus one optional demo job:
 
@@ -355,7 +361,6 @@ If you use this project in research outputs, also cite the upstream tools accord
 ### Repository internal references
 
 - Regulatory mapping notes: docs/REGULATORY_RESEARCH.md
-- Technical handover: docs/HANDOVER.md
 
 ## Limitations
 
