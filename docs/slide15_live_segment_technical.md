@@ -216,11 +216,12 @@ Final process exit is controlled by `report.overall_pass` in [src/safety_engine/
 
 ## 4.1) CI/CD walkthrough of `.github/workflows/safety-trust.yml`
 
-This workflow uses the same engine, but splits it into three operational modes:
+This workflow uses the same engine, but splits it into four operational modes:
 
 - fast PR smoke tests,
-- an enforcing PR gate on committed evidence,
-- and a nightly/manual live run.
+- a PR merge demo that is designed to pass,
+- manual strict/failure demonstrations,
+- and a manual live run.
 
 ### A) `lint-and-test`
 
@@ -256,9 +257,9 @@ What this job is testing:
 - the demo battery produces the expected breach,
 - and the gate fails closed instead of passing a synthetic violation.
 
-### C) `safety-gate`
+### C) `safety-gate` (manual strict check)
 
-This is the real PR enforcement job.
+This job is intentionally manual-only in the current workflow.
 
 - `actions/checkout@v4` and `setup-uv`: same bootstrap.
 - `uv sync`: install the core project.
@@ -266,13 +267,48 @@ This is the real PR enforcement job.
 
 What this job is testing:
 
-- that the repo baseline still stays within tolerance,
-- that a real evidence file can be ingested and scored,
-- and that a regression in committed evidence will break the PR.
+- strict gate behavior with partial evidence,
+- parser + ingest behavior on committed baseline logs,
+- and fail-closed policy when controls are `not_evidenced`.
+
+#### Exact `safety-gate` red and green examples
+
+Use these two commands to demonstrate both outcomes clearly.
+
+Red example (matches current `safety-gate` job):
+
+```bash
+uv run python -m safety_engine.run \
+  --target-provider openai --target-model gpt-4o \
+  --stages garak --garak-report examples/garak.baseline.report.jsonl \
+  --out runs/
+```
+
+Expected result:
+
+- category gate lines can be `[ok]`,
+- but controls include `not_evidenced`,
+- final exit code is `1` (`Overall: FAIL`).
+
+Green example (same gate engine, full-stage demo evidence + relaxed tolerances):
+
+```bash
+uv run python -m safety_engine.run \
+  --demo --stages garak,agentdojo,pyrit --out runs/ \
+  --fail-under prompt_injection=0.20 tool_injection=0.20
+```
+
+Expected result:
+
+- all category verdicts are within tolerance,
+- controls are fully evidenced in demo mode,
+- final exit code is `0` (`Overall: PASS`).
+
+Note: the PR-required green path in this repo is the `merge-demo-pass` job; the strict `safety-gate` job is manual by design so you can show a red failure demo without blocking every PR.
 
 ### D) `live`
 
-This job only runs on schedule or manual dispatch.
+This job runs only on manual dispatch.
 
 - Environment variables supply the live keys and judge model configuration.
 - `actions/checkout@v4` and `setup-uv`: bootstrap the environment.
@@ -295,9 +331,9 @@ What this job is testing:
 The YAML is intentionally layered:
 
 - `lint-and-test` validates code quality and parser correctness.
-- `demo-gate` validates the gate mechanics.
-- `safety-gate` enforces the committed baseline.
-- `live` exercises the expensive, secret-backed path on a schedule.
+- `merge-demo-pass` gives a predictable green PR merge path.
+- `demo-gate` and `safety-gate` are manual red/failure demos.
+- `live` exercises the expensive, secret-backed path on demand.
 
 That separation keeps PR feedback fast, preserves an enforcing check, and still gives you a realistic end-to-end live test.
 
@@ -379,6 +415,26 @@ Use these examples to explain pipeline behavior clearly during review:
 | FAIL example (strict evidence policy) | Manual `demo-gate` / `safety-gate` workflow dispatch | FAIL (exit `1`) | Under strict control policy, the demo or incomplete evidence path fails closed. |
 
 The last row is an important nuance: category tolerances can be within threshold while overall still fails because control evidence is incomplete.
+
+### I.1) How to make a PR fail on purpose (required check)
+
+This is the deterministic way to make a PR go red in the current setup.
+
+1. Create a branch for a failure demo.
+2. Edit [src/safety_engine/stages.py](../src/safety_engine/stages.py#L449) and increase demo `hits` for the `prompt-injection-tool` PyRIT probe.
+3. Run the required-check command locally:
+
+```bash
+uv run python -m safety_engine.run --demo --out runs --fail-under prompt_injection=0.20 tool_injection=0.20
+```
+
+4. Verify it returns `Overall: FAIL` and exit code `1`.
+5. Open a PR; `merge-demo-pass` should fail.
+
+Concrete example:
+
+- default probe row is attempts `20`, hits `3` (15%).
+- change hits to `5` (25%), which is above the 20% threshold in `merge-demo-pass`.
 
 ### J) Stage-by-stage internals of the pipeline
 
