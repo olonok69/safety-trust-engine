@@ -20,5 +20,8 @@ runs/
 .vscode/
 *.pdf
 
+# Local assistant config
+.claude/
+
 # Local-only docs (do not publish)
 docs/no_subir/
