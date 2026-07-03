@@ -183,6 +183,16 @@ safety-trust-engine/
 - Documentación PyRIT (0.14.0): https://microsoft.github.io/PyRIT/0.14.0/
 - Concepto de agente de red-teaming en Azure AI Foundry: https://learn.microsoft.com/en-us/azure/foundry/concepts/ai-red-teaming-agent
 
+### Guia de citacion de herramientas upstream
+
+Si usas este proyecto en resultados de investigacion, cita tambien las herramientas upstream segun su guia oficial:
+
+- Seccion de citacion de garak (README): https://github.com/NVIDIA/garak?tab=readme-ov-file#citing-garak
+- Seccion de citacion de AgentDojo (README): https://github.com/ethz-spylab/agentdojo?tab=readme-ov-file#citing
+- Archivo BibTeX de AgentDojo: https://github.com/ethz-spylab/agentdojo/blob/main/CITATION.bib
+- Guia de citacion de PyRIT (README): https://github.com/microsoft/PyRIT?tab=readme-ov-file#trademarks-and-citations
+- Metadatos de citacion de PyRIT: https://github.com/microsoft/PyRIT/blob/main/CITATION.cff
+
 ### Comentario adicional de industria
 
 - Artículo Databricks 2026 sobre model risk: https://www.databricks.com/blog/model-risk-management-2026-bankers-guide-revised-interagency-guidance
