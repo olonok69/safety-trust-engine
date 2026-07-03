@@ -1,4 +1,4 @@
-# Safety & Trust Engine
+# AI Safety & Trust Engine
 
 [![safety-trust](https://github.com/olonok69/safety-trust-engine/actions/workflows/safety-trust.yml/badge.svg?branch=main)](https://github.com/olonok69/safety-trust-engine/actions/workflows/safety-trust.yml)
 
