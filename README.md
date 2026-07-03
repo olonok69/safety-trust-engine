@@ -262,6 +262,26 @@ gh pr merge <pr-number> --merge --delete-branch
 
 This gives you one live success case and one live failure case without making every PR fail by design.
 
+### Intentionally fail a PR-required check (deterministic demo)
+
+If you want to show a PR that fails CI/CD on purpose, break `merge-demo-pass` with a tiny code change.
+
+1. Create a feature branch.
+2. In [src/safety_engine/stages.py](src/safety_engine/stages.py), edit the PyRIT demo probe `prompt-injection-tool` and increase `hits` so the demo ASR exceeds 20%.
+3. Run the same command used by `merge-demo-pass`:
+
+```bash
+uv run python -m safety_engine.run --demo --out runs --fail-under prompt_injection=0.20 tool_injection=0.20
+```
+
+4. Confirm it exits with code `1` (`Overall: FAIL`).
+5. Commit and open a PR; `merge-demo-pass` will go red.
+
+Example edit that guarantees failure:
+
+- change prompt-injection hits from `3` to `5` (for attempts `20`) in the PyRIT demo probe.
+- this changes prompt-injection ASR from 15% to 25%, above the 20% threshold.
+
 The failure demos (`demo-gate` and `safety-gate`) are still available from the
 workflow UI as manual runs, so you can show a blocked gate without making every
 PR merge path fail closed.

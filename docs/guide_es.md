@@ -18,6 +18,18 @@ Senior AI/ML Engineer
 
 Esta guía acompaña a un conjunto de diapositivas para una audiencia técnica ya familiarizada con LLMs, agentes y los fundamentos del testing adversarial. El objetivo **no** es explicar qué es el red-teaming, sino mostrar cómo convertir el red-teaming ad-hoc en una **compliance gate con evidencia y mapeo regulatorio** — la capa que se sitúa entre "ejecutamos algunos ataques una vez" y "podemos demostrar, en cada commit, que nos mantenemos dentro de la tolerancia".
 
+### ¿Qué es el testing adversarial?
+
+El testing adversarial es la evaluación deliberada de un sistema de IA usando entradas hostiles, engañosas o orientadas al abuso para medir su comportamiento bajo condiciones de ataque.
+
+En esta charla significa:
+
+- simular técnicas de ataque realistas (jailbreaks, prompt injection, tool injection, intentos de exfiltración),
+- medir resultados como intentos frente a compromisos exitosos (ASR),
+- y convertir esos resultados en controles repetibles con umbrales, evidencia y remediación.
+
+En resumen: las pruebas funcionales preguntan "¿funciona como fue diseñado?"; las pruebas adversariales preguntan "¿cómo falla cuando alguien intenta romperlo?".
+
 El motor empaqueta tres herramientas adversariales detrás de una única compliance gate, mapea cada hallazgo a un control regulatorio nombrado, aplica tolerancias de impacto por categoría, y emite un único artefacto de evidencia auditable (JSON + Markdown). Sale con código no-cero ante una brecha de tolerancia, por lo que se integra en CI/CD como un paso bloqueante.
 
 ### Artefactos relacionados en este repositorio
@@ -260,22 +272,23 @@ cat runs/st-*.md
 
 El motor está conectado a GitHub Actions (`.github/workflows/safety-trust.yml`) como dos líneas.
 
-**Cada PR / push a `main` (sin claves, corre en cualquier lugar)** — tres jobs:
+**En cada PR (sin claves, corre en cualquier lugar)** — dos checks requeridos y jobs manuales de demostración:
 
 1. `lint-and-test` — `uv sync` · `ruff check` · `pytest` (34 tests, modo demo, solo stdlib).
-2. `demo-gate` — un **autotest del mecanismo de gate**: ejecuta `safety-engine --demo`, cuyos datos sintéticos incumplen a propósito, y verifica que la gate *bloquea* (exit 1 es la condición de éxito). Esto prueba que la gate falla cerrada; **no** es una verificación ejecutable sobre evidencia real.
-3. `safety-gate` — la **verificación ejecutable**. Corre la impact-tolerance gate contra evidencia base comprometida (`examples/garak.baseline.report.jsonl`) y deja que el código de salida del motor decida el job. Sin claves: los hallazgos se *ingieren* desde el fixture, no se generan.
+2. `merge-demo-pass` — camino verde de merge: ejecuta `--demo` con tolerancias relajadas para que el check requerido sea estable y mergeable.
+3. `demo-gate` (manual) — autotest fail-closed: ejecuta `--demo` estricto y espera bloqueo (exit 1).
+4. `safety-gate` (manual) — check estricto sobre evidencia base comprometida (`examples/garak.baseline.report.jsonl`).
 
 Los dos resultados, de extremo a extremo:
 
-- **Positivo (pass).** La evidencia base está dentro de cada tolerancia → la gate sale con **0** → `safety-gate` está en **verde** → el PR es mergeable. Este es el estado estable de `main`.
-- **Negativo (fallo).** Un cambio hace que la evidencia incumpla una tolerancia — p.ej. una regresión que lleva el ataque de `jailbreak` al 20% contra una tolerancia del 10% → la gate sale con **1** → `safety-gate` se pone en **rojo**, y el artefacto nombra la categoría en brecha y una línea de remediación. El check del PR falla.
+- **Positivo (pass en PR).** `lint-and-test` + `merge-demo-pass` en verde → el PR es mergeable.
+- **Negativo (fallo de demo).** Ejecutas `demo-gate` o `safety-gate` manual y el job queda rojo cuando la gate falla cerrada.
 
-> ⚠️ **Una sutileza que vale la pena mencionar en el escenario:** un check en rojo siempre es *visible*, pero GitHub seguirá permitiéndote hacer clic en merge a menos que una **regla de protección de rama** *requiera* el check `safety-gate` en `main`. Requerirlo es lo que transforma "puedes ver que falló" en "no puedes hacer merge." Esa regla es el control real de bloqueo del despliegue (configuración del repositorio por única vez; los pasos de la UI + el comando `gh api` están en el README bajo *"Make the gate actually block merges"*).
+> ⚠️ **Una sutileza que vale la pena mencionar en el escenario:** un check en rojo siempre es *visible*, pero GitHub seguirá permitiéndote hacer clic en merge a menos que una **regla de protección de rama** requiera checks concretos en `main`. En este repo, los checks requeridos de PR son `lint-and-test` y `merge-demo-pass`.
 
-> 💡 **Nota para el Ponente:** La separación es el punto — la línea offline mantiene cada commit honesto de forma gratuita (y `safety-gate` es la gate real del PR); la línea live de abajo es el aseguramiento periódico con el modelo real. Ambas escriben la misma forma de artefacto de evidencia. Si quieres una demo en vivo del caso negativo, abre un PR que empeore la evidencia base y muestra cómo el check `safety-gate` se pone en rojo.
+> 💡 **Nota para el Ponente:** La separación es el punto — la línea de PR mantiene merges estables (`lint-and-test` + `merge-demo-pass`) y la línea manual permite demostrar fallos rojos (`demo-gate` / `safety-gate`) sin bloquear todos los PR.
 
-**Cron nocturno / dispatch manual (modelo real, necesita el secreto `OPENAI_API_KEY`)** — el job `live`: `uv sync --extra live`, construye el sidecar de garak, escanea el modelo, ejecuta la gate completa sobre garak + AgentDojo + PyRIT, y sube el artefacto de evidencia tanto si pasa como si falla.
+**Dispatch manual (modelo real, necesita el secreto `OPENAI_API_KEY`)** — el job `live`: `uv sync --extra live`, construye el sidecar de garak, escanea el modelo, ejecuta la gate completa sobre garak + AgentDojo + PyRIT, y sube el artefacto de evidencia tanto si pasa como si falla.
 
 ### Diapositiva 17b — Lecciones
 
@@ -437,14 +450,15 @@ Cuatro jobs (ver también el diagrama, `docs/safety_trust_engine_cicd_pipeline.s
 
 | Job | Líneas | Rol |
 | --- | --- | --- |
-| [triggers](../.github/workflows/safety-trust.yml#L3-L9) | 3–9 | PR · push(main) · cron nocturno · dispatch. |
+| [triggers](../.github/workflows/safety-trust.yml#L3-L7) | 3–7 | PR · dispatch manual. |
 | [`lint-and-test`](../.github/workflows/safety-trust.yml#L15-L27) | 15–27 | `uv sync` · `ruff` · `pytest`. |
-| [`demo-gate`](../.github/workflows/safety-trust.yml#L29-L52) | 29–52 | **Autotest**: ejecuta `--demo` y verifica que la gate bloquea (exit 1 = éxito). |
-| [`safety-gate`](../.github/workflows/safety-trust.yml#L61-L79) | 61–79 | **Ejecutable**: corre la gate contra [`examples/garak.baseline.report.jsonl`](../examples/garak.baseline.report.jsonl); su código de salida bloquea la build (verde dentro de tolerancia, rojo en una brecha). |
-| [`live`](../.github/workflows/safety-trust.yml#L85-L124) | 85–124 | Nocturno/dispatch: `uv sync --extra live`, construye el sidecar de garak, escanea, gate completa, sube evidencia (necesita `OPENAI_API_KEY`). |
+| [`merge-demo-pass`](../.github/workflows/safety-trust.yml#L25-L44) | 25–44 | **Camino verde de PR**: ejecuta demo con tolerancias relajadas para check requerido. |
+| [`demo-gate`](../.github/workflows/safety-trust.yml#L46-L69) | 46–69 | **Autotest manual**: ejecuta `--demo` y verifica que la gate bloquea (exit 1 = éxito). |
+| [`safety-gate`](../.github/workflows/safety-trust.yml#L77-L95) | 77–95 | **Check estricto manual** sobre baseline comprometida. |
+| [`live`](../.github/workflows/safety-trust.yml#L103-L142) | 103–142 | **Manual**: `uv sync --extra live`, sidecar garak, gate completa, upload de evidencia (requiere `OPENAI_API_KEY`). |
 
 ### 11. Archivos de soporte
 
-- [`examples/garak.baseline.report.jsonl`](../examples/garak.baseline.report.jsonl) — la evidencia base dentro de tolerancia que ejecuta el job `safety-gate` (edítala para que incumpla y el check del PR se pone en rojo).
+- [`examples/garak.baseline.report.jsonl`](../examples/garak.baseline.report.jsonl) — baseline comprometida usada por el `safety-gate` manual para demos de fallo estricto.
 - [`pyproject.toml`](../pyproject.toml) — `dependencies = []` (núcleo solo-stdlib); el extra `live` incorpora `pyrit`, `inspect-ai`, `inspect-evals[agentdojo]`; `[tool.uv.build-backend]` establece `module-name = "safety_engine"`.
 - Tests — [`tests/test_demo_gate.py`](../tests/test_demo_gate.py) (pipeline completo sobre datos de demo), [`tests/test_parsers.py`](../tests/test_parsers.py) (parsers de garak + Inspect/AgentDojo contra fixtures realistas, incluido el `.eval` zstd y los casos de polaridad), [`tests/test_providers.py`](../tests/test_providers.py) (dialectos de provider).
