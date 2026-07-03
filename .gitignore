@@ -19,3 +19,6 @@ runs/
 .idea/
 .vscode/
 *.pdf
+
+# Local-only docs (do not publish)
+docs/no_subir/

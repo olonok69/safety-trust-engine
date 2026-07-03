@@ -14,6 +14,10 @@ Una **compliance gate** automatizada de red-team para modelos y agentes LLM. Eje
 
 Todos los hallazgos se normalizan a `ProbeResult(category, attempts, hits)`, por lo que el mapper y la gate no dependen de la herramienta origen.
 
+Vista de arquitectura:
+
+![Arquitectura del Safety & Trust Engine](docs/pipeline.svg)
+
 ## Inicio rápido (offline, sin claves)
 
 ```bash
@@ -73,6 +77,8 @@ safety-engine --target-provider openai --target-model gpt-4o \
 ## CI/CD — gate en PR
 
 Workflow: `.github/workflows/safety-trust.yml`.
+
+![Pipeline CI/CD de Safety & Trust](docs/safety_trust_engine_cicd_pipeline.svg)
 
 En cada PR:
 
@@ -200,7 +206,6 @@ Si usas este proyecto en resultados de investigacion, cita tambien las herramien
 ### Referencias internas del repositorio
 
 - Notas de mapeo regulatorio: docs/REGULATORY_RESEARCH.md
-- Handover técnico: docs/HANDOVER.md
 
 ## Limitaciones
 
