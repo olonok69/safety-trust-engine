@@ -154,6 +154,44 @@ safety-trust-engine/
 └── .github/workflows/safety-trust.yml
 ```
 
+## Referencias
+
+### Fuentes regulatorias y de política
+
+- EU AI Act Artículo 15: https://artificialintelligenceact.eu/article/15/
+- Resumen DORA (EIOPA): https://www.eiopa.europa.eu/digital-operational-resilience-act-dora_en
+- FCA PS21/3 (resiliencia operacional): https://www.fca.org.uk/publications/policy-statements/ps21-3-building-operational-resilience
+- Recursos NIST AI RMF: https://airc.nist.gov/airmf-resources/airmf/
+- Perfil NIST AI 600-1 (PDF): https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf
+- Actualización FDIC 2026 sobre model risk guidance: https://www.fdic.gov/news/financial-institution-letters/2026/agencies-revise-interagency-model-risk-management-guidance
+- Sitio FDIC: https://www.fdic.gov/
+- Comunicado OCC 2026-29: https://www.occ.gov/news-issuances/news-releases/2026/nr-occ-2026-29.html
+- Federal Reserve SR 26-02: https://www.federalreserve.gov/supervisionreg/srletters/SR2602.htm
+
+### Herramientas de testing adversarial usadas en este proyecto
+
+- garak (NVIDIA): https://github.com/NVIDIA/garak
+- Documentación de garak: https://reference.garak.ai/en/latest/index.html
+- Proveedor trustyai para garak (llama-stack): https://github.com/trustyai-explainability/llama-stack-provider-trustyai-garak
+- Tutorial de workflow con garak (MarkTechPost): https://www.marktechpost.com/2026/06/06/nvidia-garak-tutorial-build-a-complete-defensive-llm-red-teaming-workflow-with-custom-probes-and-detectors/
+- Repositorio AgentDojo: https://github.com/ethz-spylab/agentdojo
+- Paper de AgentDojo (arXiv): https://arxiv.org/pdf/2406.13352
+- API de tareas base de AgentDojo: https://agentdojo.spylab.ai/api/base_tasks/
+- Repositorio Inspect AI: https://github.com/UKGovernmentBEIS/inspect_ai
+- Documentación Inspect AI: https://inspect.aisi.org.uk/
+- Repositorio PyRIT: https://github.com/microsoft/PyRIT
+- Documentación PyRIT (0.14.0): https://microsoft.github.io/PyRIT/0.14.0/
+- Concepto de agente de red-teaming en Azure AI Foundry: https://learn.microsoft.com/en-us/azure/foundry/concepts/ai-red-teaming-agent
+
+### Comentario adicional de industria
+
+- Artículo Databricks 2026 sobre model risk: https://www.databricks.com/blog/model-risk-management-2026-bankers-guide-revised-interagency-guidance
+
+### Referencias internas del repositorio
+
+- Notas de mapeo regulatorio: docs/REGULATORY_RESEARCH.md
+- Handover técnico: docs/HANDOVER.md
+
 ## Limitaciones
 
 - Los resultados demo son sintéticos.

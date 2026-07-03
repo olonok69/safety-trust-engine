@@ -309,6 +309,44 @@ safety-trust-engine/
 └── .github/workflows/safety-trust.yml
 ```
 
+## References
+
+### Regulatory and policy sources
+
+- EU AI Act Article 15: https://artificialintelligenceact.eu/article/15/
+- DORA overview (EIOPA): https://www.eiopa.europa.eu/digital-operational-resilience-act-dora_en
+- FCA PS21/3 (operational resilience): https://www.fca.org.uk/publications/policy-statements/ps21-3-building-operational-resilience
+- NIST AI RMF resources: https://airc.nist.gov/airmf-resources/airmf/
+- NIST AI 600-1 profile (PDF): https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf
+- FDIC 2026 interagency model risk guidance update: https://www.fdic.gov/news/financial-institution-letters/2026/agencies-revise-interagency-model-risk-management-guidance
+- FDIC home: https://www.fdic.gov/
+- OCC news release 2026-29: https://www.occ.gov/news-issuances/news-releases/2026/nr-occ-2026-29.html
+- Federal Reserve SR 26-02: https://www.federalreserve.gov/supervisionreg/srletters/SR2602.htm
+
+### Adversarial testing tools used in this project
+
+- garak (NVIDIA): https://github.com/NVIDIA/garak
+- garak documentation: https://reference.garak.ai/en/latest/index.html
+- trustyai garak provider (llama-stack): https://github.com/trustyai-explainability/llama-stack-provider-trustyai-garak
+- garak workflow tutorial (MarkTechPost): https://www.marktechpost.com/2026/06/06/nvidia-garak-tutorial-build-a-complete-defensive-llm-red-teaming-workflow-with-custom-probes-and-detectors/
+- AgentDojo repository: https://github.com/ethz-spylab/agentdojo
+- AgentDojo paper (arXiv): https://arxiv.org/pdf/2406.13352
+- AgentDojo base tasks API: https://agentdojo.spylab.ai/api/base_tasks/
+- Inspect AI repository: https://github.com/UKGovernmentBEIS/inspect_ai
+- Inspect AI docs: https://inspect.aisi.org.uk/
+- PyRIT repository: https://github.com/microsoft/PyRIT
+- PyRIT docs (0.14.0): https://microsoft.github.io/PyRIT/0.14.0/
+- Azure AI Foundry red-teaming agent concept: https://learn.microsoft.com/en-us/azure/foundry/concepts/ai-red-teaming-agent
+
+### Additional industry commentary
+
+- Databricks 2026 model risk article: https://www.databricks.com/blog/model-risk-management-2026-bankers-guide-revised-interagency-guidance
+
+### Repository internal references
+
+- Regulatory mapping notes: docs/REGULATORY_RESEARCH.md
+- Technical handover: docs/HANDOVER.md
+
 ## Limitations
 
 - Demo findings are synthetic; the live parsers (`_parse_garak_report`,
