@@ -1,6 +1,5 @@
 # AI Safety & Trust Engine
 
-[![safety-trust](https://github.com/olonok69/safety-trust-engine/actions/workflows/safety-trust.yml/badge.svg?branch=main)](https://github.com/olonok69/safety-trust-engine/actions/workflows/safety-trust.yml)
 
 Una **compliance gate** automatizada de red-team para modelos y agentes LLM. Ejecuta tres stages adversariales, mapea cada hallazgo a un control regulatorio, aplica tolerancias de impacto y genera un artefacto único auditable. Sale con código distinto de cero cuando hay brecha, por lo que se integra directamente en CI/CD como control bloqueante.
 
