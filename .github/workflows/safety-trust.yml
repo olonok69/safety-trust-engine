@@ -24,7 +24,11 @@ jobs:
       - name: Tests (demo-mode pipeline)
         run: uv run pytest -q
 
+  # Green-merge demo: skip on draft PRs so WIP branches (e.g. US packs) only
+  # pay for lint-and-test. Undraft before merge if branch protection still
+  # requires this check (strict mode via protect-main.ps1).
   merge-demo-pass:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
