@@ -24,6 +24,59 @@ jobs:
       - name: Tests (demo-mode pipeline)
         run: uv run pytest -q
 
+  # Regime-pack smoke: default eu_uk, us-only, and combined — same evidence,
+  # different control rows. Cheap demo runs; safe on draft PRs.
+  regime-packs:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - regimes: eu_uk
+            slug: eu_uk
+          - regimes: us
+            slug: us
+          - regimes: eu_uk,us
+            slug: eu_uk-us
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - run: uv sync
+      - name: Demo gate for regimes=${{ matrix.regimes }}
+        env:
+          REGIMES: ${{ matrix.regimes }}
+          OUT: runs/regimes-${{ matrix.slug }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          uv run python -m safety_engine.run \
+            --demo --regimes "$REGIMES" --out "$OUT" \
+            --fail-under prompt_injection=0.20 tool_injection=0.20
+          python - <<'PY'
+          import json, os, pathlib
+          regimes = os.environ["REGIMES"].split(",")
+          out = pathlib.Path(os.environ["OUT"])
+          payload = json.loads(next(out.glob("st-*.json")).read_text())
+          assert payload["regimes"] == regimes, (payload["regimes"], regimes)
+          regs = {row["regulation"] for row in payload["compliance"]}
+          if regimes == ["us"]:
+              assert regs == {"NIST AI RMF", "Federal MRM"}, regs
+              assert "EU AI Act" not in regs
+          elif regimes == ["eu_uk"]:
+              assert regs == {"EU AI Act", "DORA", "FCA PS21/3"}, regs
+          else:
+              assert "NIST AI RMF" in regs and "EU AI Act" in regs, regs
+          assert payload["overall"] == "pass", payload["overall"]
+          print("ok", payload["regimes"], "controls=", len(payload["compliance"]))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regime-packs-${{ matrix.slug }}
+          path: runs/regimes-${{ matrix.slug }}/
+
   # Green-merge demo: skip on draft PRs so WIP branches (e.g. US packs) only
   # pay for lint-and-test. Undraft before merge if branch protection still
   # requires this check (strict mode via protect-main.ps1).

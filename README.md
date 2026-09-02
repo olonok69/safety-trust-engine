@@ -175,12 +175,13 @@ the diagram in [docs/safety_trust_engine_cicd_pipeline.svg](docs/safety_trust_en
 
 ![Safety & Trust CI/CD pipeline](docs/safety_trust_engine_cicd_pipeline.svg)
 
-**On every PR** (no keys, runs anywhere) — two required jobs plus one optional demo job:
+**On every PR** (no keys, runs anywhere) — smoke jobs plus a green-merge demo:
 
 | Job | What it does |
 | --- | --- |
 | `lint-and-test` | `uv sync` · `ruff check` · `pytest` (demo-mode, stdlib only) |
-| `merge-demo-pass` | **green merge demo** — runs `--demo` with relaxed tolerances so the gate passes and the PR can merge when protected checks are green. |
+| `regime-packs` | matrix over `--regimes eu_uk` / `us` / `eu_uk,us` — demo with relaxed tolerances; asserts the artifact’s control set matches the pack |
+| `merge-demo-pass` | **green merge demo** — runs `--demo` with relaxed tolerances so the gate passes and the PR can merge when protected checks are green (skipped on draft PRs). |
 | `demo-gate` | **optional failure demo** — runs only on manual dispatch, uses `--demo` with the default strict tolerances, and proves the gate blocks when a breach is present. |
 | `safety-gate` | **optional strict evidence demo** — runs only on manual dispatch against committed baseline evidence ([`examples/garak.baseline.report.jsonl`](examples/garak.baseline.report.jsonl)). |
 
