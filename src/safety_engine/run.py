@@ -20,6 +20,9 @@ Examples
     # Stricter gate for a high-risk important business service:
     python -m safety_engine.run --demo --fail-under tool_injection=0.0
 
+    # US-only control pack (NIST AI RMF + federal MRM):
+    python -m safety_engine.run --demo --regimes us
+
 To red-team a full AGENT (not just a model endpoint), import `run` and pass a
 `pyrit_target_factory` returning a PyRIT PromptTarget that wraps your agent.
 """
@@ -27,12 +30,18 @@ To red-team a full AGENT (not just a model endpoint), import `run` and pass a
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .compliance import AGENTDOJO, GARAK, PYRIT
+from .compliance import (
+    AGENTDOJO,
+    GARAK,
+    PYRIT,
+    available_regimes,
+    resolve_regimes,
+)
 from .providers import build_target
 from .report import build_report, write_json, write_markdown
 from .stages import STAGE_RUNNERS, StageResult
@@ -48,12 +57,14 @@ def _parse_tolerances(items: list[str]) -> dict[str, float]:
 
 def run(target: dict, stage_names: list[str], *, demo: bool,
         tolerances: dict[str, float], out_dir: Path,
+        regimes: Sequence[str] | None = None,
         pyrit_target_factory: Callable[[], Any] | None = None) -> bool:
     """Run the selected stages and write the evidence artifact. Returns pass/fail.
 
     `pyrit_target_factory` (programmatic only) is forwarded to the PyRIT stage to
     red-team an agent instead of a model endpoint.
     """
+    selected = resolve_regimes(regimes)
     results: list[StageResult] = []
     for name in stage_names:
         runner = STAGE_RUNNERS[name]
@@ -63,7 +74,7 @@ def run(target: dict, stage_names: list[str], *, demo: bool,
         results.append(result)
 
     run_id = datetime.now(UTC).strftime("st-%Y%m%dT%H%M%SZ")
-    report = build_report(run_id, target, results, tolerances)
+    report = build_report(run_id, target, results, tolerances, regimes=selected)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     write_json(report, out_dir / f"{run_id}.json")
@@ -76,7 +87,8 @@ def run(target: dict, stage_names: list[str], *, demo: bool,
 
     not_evidenced = [v for v in report.control_verdicts if v.status == "not_evidenced"]
     failed = [v for v in report.control_verdicts if v.status == "fail"]
-    print(f"\nControls: {len(report.control_verdicts)} total, "
+    print(f"\nRegimes: {', '.join(selected)}")
+    print(f"Controls: {len(report.control_verdicts)} total, "
           f"{len(failed)} failing, {len(not_evidenced)} not evidenced")
     for v in failed:
         print(f"  FAIL {v.control.regulation} {v.control.ref} "
@@ -95,6 +107,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="offline deterministic run, no keys/installs")
     ap.add_argument("--stages", default="garak,agentdojo,pyrit",
                     help="comma list of stages to run")
+    ap.add_argument("--regimes", default="eu_uk",
+                    help="comma list of regime packs to evaluate "
+                         f"(default: eu_uk; available: {', '.join(available_regimes())})")
     ap.add_argument("--target-provider", default="demo",
                     help="demo | openai | azure | foundry | google | bedrock")
     ap.add_argument("--target-model", default=None,
@@ -119,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
     if bad:
         ap.error(f"unknown stage(s): {bad}; valid: {sorted(valid)}")
 
+    regime_names = [r.strip() for r in args.regimes.split(",") if r.strip()]
+    try:
+        regimes = resolve_regimes(regime_names)
+    except ValueError as exc:
+        ap.error(str(exc))
+
     overrides = {}
     if args.garak_report:
         overrides["garak_report"] = str(args.garak_report)
@@ -127,10 +148,11 @@ def main(argv: list[str] | None = None) -> int:
     target = build_target(args.target_provider, args.target_model,
                           demo=args.demo, **overrides)
     print(f"Target: {target['provider']}/{target['model']}  "
-          f"stages={stage_names}  demo={args.demo}\n")
+          f"stages={stage_names}  regimes={list(regimes)}  demo={args.demo}\n")
 
     ok = run(target, stage_names, demo=args.demo,
-             tolerances=_parse_tolerances(args.fail_under), out_dir=args.out)
+             tolerances=_parse_tolerances(args.fail_under), out_dir=args.out,
+             regimes=regimes)
     return 0 if ok else 1
 
 

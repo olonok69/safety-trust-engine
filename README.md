@@ -58,11 +58,25 @@ Override per run: `--fail-under tool_injection=0.0 jailbreak=0.05`.
 
 ## Regulation mapping
 
-`compliance.py` declares which stages **evidence** each control across three
-regimes (EU AI Act Art. 15 & 55, DORA, FCA PS21/3). A control passes only when
-*every* evidencing stage ran **and** stayed within tolerance; a control whose
-stages were skipped is `not_evidenced` — never `pass` — so a partial scan can't
-silently certify an untested obligation. Full citations: [docs/REGULATORY_RESEARCH.md](docs/REGULATORY_RESEARCH.md).
+`compliance.py` declares which stages **evidence** each control, organised into
+selectable **regime packs**:
+
+| Pack | Instruments | Default? |
+| --- | --- | --- |
+| `eu_uk` | EU AI Act Art. 15 & 55, DORA, FCA PS21/3 | yes |
+| `us` | NIST AI RMF (MEASURE 2.6–2.7, AI 600-1), federal MRM (SR 26-02) | opt-in |
+
+```bash
+safety-engine --demo --regimes us              # US pack only
+safety-engine --demo --regimes eu_uk,us        # both lenses on the same evidence
+```
+
+A control passes only when *every* evidencing stage ran **and** stayed within
+tolerance; a control whose stages were skipped is `not_evidenced` — never
+`pass` — so a partial scan can't silently certify an untested obligation. US
+controls are marked `guidance` (NIST) or `supervisory` (MRM) in the artifact so
+they are not read as statutory certification. Full citations:
+[docs/REGULATORY_RESEARCH.md](docs/REGULATORY_RESEARCH.md) (§4.5 for the US pack).
 
 ## Providers
 

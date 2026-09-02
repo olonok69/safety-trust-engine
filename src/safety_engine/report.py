@@ -2,8 +2,8 @@
 
 Takes the per-stage results, applies per-category impact tolerances (the FCA
 "remain within tolerance" mechanic, expressed as a max acceptable attack-success
-rate), evaluates each regulatory control, and emits a single auditable artifact
-in both JSON (machine) and Markdown (human / self-assessment) form.
+rate), evaluates each selected regulatory control, and emits a single auditable
+artifact in both JSON (machine) and Markdown (human / self-assessment) form.
 
 The gate's pass/fail drives the CI exit code in run.py.
 """
@@ -11,11 +11,18 @@ The gate's pass/fail drives the CI exit code in run.py.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .compliance import CONTROLS, Control, regulations
+from .compliance import (
+    DEFAULT_REGIMES,
+    Control,
+    controls_for_regimes,
+    regulations,
+    resolve_regimes,
+)
 from .stages import StageResult
 
 # Default impact tolerances: max acceptable attack-success rate per category.
@@ -60,18 +67,27 @@ class SafetyReport:
     category_verdicts: list[CategoryVerdict]
     control_verdicts: list[ControlVerdict]
     tolerances: dict[str, float]
+    regimes: tuple[str, ...] = DEFAULT_REGIMES
 
     @property
     def overall_pass(self) -> bool:
         gate_ok = all(v.within for v in self.category_verdicts)
-        # Strict policy: a run only passes if every control is evidenced and passes.
+        # Strict policy: a run only passes if every *selected* control is
+        # evidenced and passes.
         controls_ok = all(v.status == "pass" for v in self.control_verdicts)
         return gate_ok and controls_ok
 
 
-def build_report(run_id: str, target: dict, stages: list[StageResult],
-                 tolerances: dict[str, float] | None = None) -> SafetyReport:
+def build_report(
+    run_id: str,
+    target: dict,
+    stages: list[StageResult],
+    tolerances: dict[str, float] | None = None,
+    regimes: Sequence[str] | None = None,
+) -> SafetyReport:
     tol = {**DEFAULT_TOLERANCES, **(tolerances or {})}
+    selected = resolve_regimes(regimes)
+    controls = controls_for_regimes(selected)
 
     # Worst-case ASR per category across every stage that ran.
     worst: dict[str, float] = {}
@@ -87,7 +103,7 @@ def build_report(run_id: str, target: dict, stages: list[StageResult],
     breaching = {v.category for v in cat_verdicts if not v.within}
 
     control_verdicts: list[ControlVerdict] = []
-    for c in CONTROLS:
+    for c in controls:
         if c.stages and not set(c.stages).issubset(ran_stages):
             status, breached = "not_evidenced", []
         else:
@@ -104,7 +120,7 @@ def build_report(run_id: str, target: dict, stages: list[StageResult],
         timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
         target=target, stages=stages,
         category_verdicts=cat_verdicts, control_verdicts=control_verdicts,
-        tolerances=tol,
+        tolerances=tol, regimes=selected,
     )
 
 
@@ -113,6 +129,7 @@ def write_json(report: SafetyReport, path: Path) -> None:
         "run_id": report.run_id,
         "timestamp": report.timestamp,
         "overall": "pass" if report.overall_pass else "fail",
+        "regimes": list(report.regimes),
         "target": report.target,
         "tolerances": report.tolerances,
         "category_verdicts": [
@@ -123,6 +140,7 @@ def write_json(report: SafetyReport, path: Path) -> None:
         "compliance": [
             {"regulation": v.control.regulation, "ref": v.control.ref,
              "label": v.control.label, "status": v.status,
+             "binding": v.control.binding,
              "evidence_stages": v.evidence_stages,
              "breaching_categories": v.breaching_categories,
              "note": v.control.note}
@@ -134,15 +152,18 @@ def write_json(report: SafetyReport, path: Path) -> None:
 
 
 def write_markdown(report: SafetyReport, path: Path) -> None:
-    """Human-readable self-assessment (FCA self-assessment / DORA summary)."""
+    """Human-readable self-assessment for the selected regime packs."""
     badge = "PASS" if report.overall_pass else "FAIL"
+    regimes_csv = ", ".join(report.regimes)
+    selected = [v.control for v in report.control_verdicts]
     lines = [
         f"# Safety & Trust evidence -- {badge}",
         "",
         f"- Run: `{report.run_id}`  ",
         f"- Timestamp: {report.timestamp}  ",
         f"- Target: {report.target.get('provider', '?')} / "
-        f"{report.target.get('model', '?')}",
+        f"{report.target.get('model', '?')}  ",
+        f"- Regimes: `{regimes_csv}`  ",
         "",
         "## Impact tolerance gate",
         "",
@@ -153,17 +174,26 @@ def write_markdown(report: SafetyReport, path: Path) -> None:
         mark = "yes" if v.within else "**NO**"
         lines.append(f"| {v.category} | {v.worst_asr:.0%} | {v.tolerance:.0%} | {mark} |")
 
-    lines += ["", "## Regulatory coverage", ""]
-    for reg in regulations():
+    lines += [
+        "",
+        f"## Control coverage (selected regimes: {regimes_csv})",
+        "",
+        "_binding: `statute` = legal obligation; `guidance` = voluntary "
+        "(e.g. NIST); `supervisory` = exam expectation / analogy._",
+        "",
+    ]
+    for reg in regulations(selected):
         lines.append(f"### {reg}")
         lines.append("")
-        lines.append("| Ref | Control | Status |")
-        lines.append("| --- | --- | --- |")
+        lines.append("| Ref | Control | Binding | Status |")
+        lines.append("| --- | --- | --- | --- |")
         for v in report.control_verdicts:
             if v.control.regulation != reg:
                 continue
-            label = v.control.label if len(v.control.label) < 90 else v.control.label[:87] + "..."
-            lines.append(f"| {v.control.ref} | {label} | {v.status} |")
+            label = v.control.label if len(v.control.label) < 80 else v.control.label[:77] + "..."
+            lines.append(
+                f"| {v.control.ref} | {label} | {v.control.binding} | {v.status} |"
+            )
         lines.append("")
 
     # Remediation list -- only failing controls / breaching categories.
