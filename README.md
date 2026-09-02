@@ -77,6 +77,7 @@ tolerance; a control whose stages were skipped is `not_evidenced` — never
 controls are marked `guidance` (NIST) or `supervisory` (MRM) in the artifact so
 they are not read as statutory certification. Full citations:
 [docs/REGULATORY_RESEARCH.md](docs/REGULATORY_RESEARCH.md) (§4.5 for the US pack).
+US buyer notes: [docs/US_COMPLIANCE.md](docs/US_COMPLIANCE.md).
 
 ## Providers
 
