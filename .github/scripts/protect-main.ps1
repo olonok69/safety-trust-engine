@@ -5,6 +5,15 @@ param(
     [int]$RequiredApprovals = 0
 )
 
+<#
+.SYNOPSIS
+  Restore strict main branch protection (lint-and-test + merge-demo-pass).
+
+.DESCRIPTION
+  Counterpart to relax-main.ps1. Re-enable after WIP iteration on feature
+  branches so the green-merge demo is again a required check.
+#>
+
 $ErrorActionPreference = "Stop"
 
 function Get-RepositorySlug {

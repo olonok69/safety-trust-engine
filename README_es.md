@@ -1,6 +1,5 @@
 # AI Safety & Trust Engine
 
-[![safety-trust](https://github.com/olonok69/safety-trust-engine/actions/workflows/safety-trust.yml/badge.svg?branch=main)](https://github.com/olonok69/safety-trust-engine/actions/workflows/safety-trust.yml)
 
 Una **compliance gate** automatizada de red-team para modelos y agentes LLM. Ejecuta tres stages adversariales, mapea cada hallazgo a un control regulatorio, aplica tolerancias de impacto y genera un artefacto único auditable. Sale con código distinto de cero cuando hay brecha, por lo que se integra directamente en CI/CD como control bloqueante.
 
@@ -42,7 +41,25 @@ Override por ejecución: `--fail-under tool_injection=0.0 jailbreak=0.05`.
 
 ## Mapeo regulatorio
 
-`compliance.py` declara qué stages evidencian cada control (EU AI Act, DORA, FCA). Un control solo pasa si todos sus stages de evidencia corrieron y quedaron dentro de tolerancia. Si falta evidencia, el estado es `not_evidenced`.
+`compliance.py` declara qué stages evidencian cada control, organizados en
+**packs** seleccionables:
+
+| Pack | Instrumentos | ¿Por defecto? |
+| --- | --- | --- |
+| `eu_uk` | EU AI Act Art. 15 y 55, DORA, FCA PS21/3 | sí |
+| `us` | NIST AI RMF (MEASURE 2.6–2.7, AI 600-1), MRM federal (SR 26-02) | opt-in |
+
+```bash
+safety-engine --demo --regimes us              # solo pack US
+safety-engine --demo --regimes eu_uk,us        # ambas lentes sobre la misma evidencia
+```
+
+Un control solo pasa si todos sus stages de evidencia corrieron y quedaron
+dentro de tolerancia. Si falta evidencia, el estado es `not_evidenced`. Los
+controles US llevan `binding` `guidance` (NIST) o `supervisory` (MRM) en el
+artefacto — no son certificación estatutaria. Detalle:
+[docs/REGULATORY_RESEARCH.md](docs/REGULATORY_RESEARCH.md) §4.5 ·
+[docs/US_COMPLIANCE.md](docs/US_COMPLIANCE.md).
 
 ## Providers
 
