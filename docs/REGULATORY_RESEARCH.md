@@ -1,11 +1,12 @@
 # Regulatory & tooling research
 
-Background dossier for the Safety & Trust engine. It documents the three
-regulatory regimes the engine maps findings to, and the three red-team tools it
-orchestrates. Everything here is paraphrased from primary and secondary sources;
-see [References](#references) for links. Article and paragraph numbers follow the
-consolidated published texts — confirm against the Official Journal version your
-compliance team relies on before citing externally.
+Background dossier for the Safety & Trust engine. It documents the regulatory
+regimes the engine maps findings to (selectable packs ``eu_uk`` and ``us``), and
+the three red-team tools it orchestrates. Everything here is paraphrased from
+primary and secondary sources; see [References](#references) for links. Article
+and paragraph numbers follow the consolidated published texts — confirm against
+the Official Journal / agency version your compliance team relies on before
+citing externally.
 
 > Scope note: this is engineering-facing background to justify the control
 > mapping in `compliance.py`. It is not legal advice, and "evidence" here means
@@ -178,7 +179,7 @@ ready-made input to the firm's self-assessment.
 
 ---
 
-## 4.5 The US parallel — NIST AI RMF and federal model-risk management
+## 4.5 US pack — NIST AI RMF and federal model-risk management
 
 The engine's default pack encodes three regimes (§§2–4). For a US-domiciled
 deployment, two further instruments are the closest American analogues — one for
