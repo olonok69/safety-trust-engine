@@ -58,11 +58,26 @@ Override per run: `--fail-under tool_injection=0.0 jailbreak=0.05`.
 
 ## Regulation mapping
 
-`compliance.py` declares which stages **evidence** each control across three
-regimes (EU AI Act Art. 15 & 55, DORA, FCA PS21/3). A control passes only when
-*every* evidencing stage ran **and** stayed within tolerance; a control whose
-stages were skipped is `not_evidenced` — never `pass` — so a partial scan can't
-silently certify an untested obligation. Full citations: [docs/REGULATORY_RESEARCH.md](docs/REGULATORY_RESEARCH.md).
+`compliance.py` declares which stages **evidence** each control, organised into
+selectable **regime packs**:
+
+| Pack | Instruments | Default? |
+| --- | --- | --- |
+| `eu_uk` | EU AI Act Art. 15 & 55, DORA, FCA PS21/3 | yes |
+| `us` | NIST AI RMF (MEASURE 2.6–2.7, AI 600-1), federal MRM (SR 26-02) | opt-in |
+
+```bash
+safety-engine --demo --regimes us              # US pack only
+safety-engine --demo --regimes eu_uk,us        # both lenses on the same evidence
+```
+
+A control passes only when *every* evidencing stage ran **and** stayed within
+tolerance; a control whose stages were skipped is `not_evidenced` — never
+`pass` — so a partial scan can't silently certify an untested obligation. US
+controls are marked `guidance` (NIST) or `supervisory` (MRM) in the artifact so
+they are not read as statutory certification. Full citations:
+[docs/REGULATORY_RESEARCH.md](docs/REGULATORY_RESEARCH.md) (§4.5 for the US pack).
+US buyer notes: [docs/US_COMPLIANCE.md](docs/US_COMPLIANCE.md).
 
 ## Providers
 
@@ -160,12 +175,13 @@ the diagram in [docs/safety_trust_engine_cicd_pipeline.svg](docs/safety_trust_en
 
 ![Safety & Trust CI/CD pipeline](docs/safety_trust_engine_cicd_pipeline.svg)
 
-**On every PR** (no keys, runs anywhere) — two required jobs plus one optional demo job:
+**On every PR** (no keys, runs anywhere) — smoke jobs plus a green-merge demo:
 
 | Job | What it does |
 | --- | --- |
 | `lint-and-test` | `uv sync` · `ruff check` · `pytest` (demo-mode, stdlib only) |
-| `merge-demo-pass` | **green merge demo** — runs `--demo` with relaxed tolerances so the gate passes and the PR can merge when protected checks are green. |
+| `regime-packs` | matrix over `--regimes eu_uk` / `us` / `eu_uk,us` — demo with relaxed tolerances; asserts the artifact’s control set matches the pack |
+| `merge-demo-pass` | **green merge demo** — runs `--demo` with relaxed tolerances so the gate passes and the PR can merge when protected checks are green (skipped on draft PRs). |
 | `demo-gate` | **optional failure demo** — runs only on manual dispatch, uses `--demo` with the default strict tolerances, and proves the gate blocks when a breach is present. |
 | `safety-gate` | **optional strict evidence demo** — runs only on manual dispatch against committed baseline evidence ([`examples/garak.baseline.report.jsonl`](examples/garak.baseline.report.jsonl)). |
 

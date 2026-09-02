@@ -1,11 +1,12 @@
 # Regulatory & tooling research
 
-Background dossier for the Safety & Trust engine. It documents the three
-regulatory regimes the engine maps findings to, and the three red-team tools it
-orchestrates. Everything here is paraphrased from primary and secondary sources;
-see [References](#references) for links. Article and paragraph numbers follow the
-consolidated published texts — confirm against the Official Journal version your
-compliance team relies on before citing externally.
+Background dossier for the Safety & Trust engine. It documents the regulatory
+regimes the engine maps findings to (selectable packs ``eu_uk`` and ``us``), and
+the three red-team tools it orchestrates. Everything here is paraphrased from
+primary and secondary sources; see [References](#references) for links. Article
+and paragraph numbers follow the consolidated published texts — confirm against
+the Official Journal / agency version your compliance team relies on before
+citing externally.
 
 > Scope note: this is engineering-facing background to justify the control
 > mapping in `compliance.py`. It is not legal advice, and "evidence" here means
@@ -31,9 +32,8 @@ Bedrock itself is an ICT third party (DORA Chapter V).
 
 A US-domiciled deployment — or a UK/EU stack serving US users — has two further
 analogues: **NIST AI RMF** (the AI-system axis) and **federal model-risk
-management** (the financial axis). These are documented in §4.5 as *parallel
-lenses* read against the same evidence; neither is encoded in `compliance.py`,
-and so neither appears in the §6 matrix.
+management** (the financial axis). These are documented in §4.5 and encoded in
+the ``us`` regime pack (`--regimes us`); the default pack remains ``eu_uk``.
 
 ---
 
@@ -179,14 +179,14 @@ ready-made input to the firm's self-assessment.
 
 ---
 
-## 4.5 The US parallel — NIST AI RMF and federal model-risk management
+## 4.5 US pack — NIST AI RMF and federal model-risk management
 
-The engine encodes three regimes (§§2–4). For a US-domiciled deployment, two
-further instruments are the closest American analogues — one for the AI system,
-one for financial-sector model risk. They are documented here for completeness
-and as **parallel lenses**: neither is currently encoded in `compliance.py`, and
-so neither appears in the §6 matrix. The mapping principle still holds — the
-*same* evidence artifact can be read through these lenses without re-gathering it.
+The engine's default pack encodes three regimes (§§2–4). For a US-domiciled
+deployment, two further instruments are the closest American analogues — one for
+the AI system, one for financial-sector model risk. They are encoded in the
+``us`` pack (`--regimes us`) and appear in the §6 matrix. The mapping principle
+holds — the *same* evidence artifact can be read through these lenses without
+re-gathering it.
 
 ### 4.5a NIST AI RMF — the EU AI Act analogue (AI-system axis)
 
@@ -211,11 +211,10 @@ The Generative AI Profile (AI 600-1) defines twelve GAI-specific risk categories
 (including prompt-injection / information-security risks) and recommends
 red-teaming as a pre-deployment measure — the same activity the engine automates.
 
-**Relevance to the engine:** a parallel lens, not an encoded control. The same
-prompt-injection / jailbreak / tool-injection findings that evidence EU AI Act
-Art. 15(5) map onto MEASURE 2.6–2.7. Wiring NIST AI RMF (and the MIT AI Risk
-Repository) into `compliance.py` as additional `Control` rows is the natural next
-step.
+**Relevance to the engine:** encoded in the ``us`` pack as `NIST AI RMF` controls
+(MEASURE 2.6, 2.7, AI 600-1, documentation). The same prompt-injection /
+jailbreak / tool-injection findings that evidence EU AI Act Art. 15(5) map onto
+MEASURE 2.6–2.7. Binding is ``guidance`` (voluntary — not certification).
 
 ### 4.5b Federal model-risk management — the DORA + FCA analogue (financial axis)
 
@@ -241,12 +240,13 @@ and agent-based systems **by analogy**. So for an agentic system the MRM
 expectation is a supervisory analogy today, not a codified rule — the same
 honesty caveat as DORA TLPT (continuous assurance is not a formal exercise).
 
-**Relevance to the engine:** a parallel lens, not an encoded control. The gate's
-JSON + Markdown artifact is the validation-and-documentation evidence a model-risk
-reviewer asks for when MRM principles are applied to an agent. As with DORA's
-third-party pillar, the substantive obligations (model inventory, board
-governance, the firm's MRM policy) live in the institution's MRM process, not in
-the test run.
+**Relevance to the engine:** encoded in the ``us`` pack as `Federal MRM` controls
+(validation, monitoring, documentation, third-party model). Binding is
+``supervisory``. The gate's JSON + Markdown artifact is the
+validation-and-documentation evidence a model-risk reviewer asks for when MRM
+principles are applied to an agent. As with DORA's third-party pillar, the
+substantive obligations (model inventory, board governance, the firm's MRM
+policy) live in the institution's MRM process, not in the test run.
 
 > Scope note (US): NIST AI RMF is **voluntary guidance**; federal MRM guidance is
 > a **supervisory expectation** enforced through examination, not a statute with a
@@ -340,12 +340,17 @@ still be hijacked through a tool result (AgentDojo) or coerced over several turn
 | FCA PS21/3 | 6.2 / SS1/21 | | ✓ | ✓ | |
 | FCA PS21/3 | Impact tolerance | ✓ | ✓ | ✓ | the ASR gate |
 | FCA PS21/3 | Self-assessment | | | | Markdown artifact |
+| NIST AI RMF (`us`) | MEASURE 2.6 | ✓ | ✓ | ✓ | guidance |
+| NIST AI RMF (`us`) | MEASURE 2.7 | ✓ | ✓ | ✓ | guidance |
+| NIST AI RMF (`us`) | AI 600-1 | ✓ | ✓ | ✓ | guidance |
+| NIST AI RMF (`us`) | MEASURE documentation | | | | Markdown artifact |
+| Federal MRM (`us`) | SR 26-02 validation | | ✓ | ✓ | supervisory analogy |
+| Federal MRM (`us`) | SR 26-02 monitoring | ✓ | ✓ | ✓ | the ASR gate |
+| Federal MRM (`us`) | SR 26-02 documentation | | | | Markdown artifact |
+| Federal MRM (`us`) | Third-party model | | | | target provider metadata |
 
 This matrix is the source of truth that `compliance.py` encodes in code.
-
-The US parallels in §4.5 (NIST AI RMF, federal MRM) are deliberately **not**
-encoded and so do not appear above; they are read-through lenses on the same
-evidence, and the candidate next additions to the mapping.
+Select packs with ``--regimes eu_uk`` (default), ``--regimes us``, or both.
 
 ---
 

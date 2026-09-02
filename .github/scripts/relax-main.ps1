@@ -1,25 +1,25 @@
 param(
     [string]$Repository,
-    [string]$Branch = "main",
-    [ValidateRange(0, 6)]
-    [int]$RequiredApprovals = 0
+    [string]$Branch = "main"
 )
 
 <#
 .SYNOPSIS
-  Restore strict main branch protection (lint-and-test + merge-demo-pass).
+  Temporarily relax main branch protection for fast WIP iteration.
 
 .DESCRIPTION
-  Counterpart to relax-main.ps1. Re-enable after WIP iteration on feature
-  branches so the green-merge demo is again a required check.
+  Drops merge-demo-pass and conversation-resolution requirements so PRs only
+  need lint-and-test. Use while building features (e.g. US compliance packs)
+  to avoid long green-merge demo cycles and noisy bot re-runs.
+
+  Restore strict policy when done:
+    ./.github/scripts/protect-main.ps1
 #>
 
 $ErrorActionPreference = "Stop"
 
 function Get-RepositorySlug {
-    param(
-        [string]$RemoteUrl
-    )
+    param([string]$RemoteUrl)
 
     if ($RemoteUrl -match '^https://github\.com/(?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?/?$|^git@github\.com:(?<owner_ssh>[^/]+)/(?<repo_ssh>[^/]+?)(?:\.git)?$') {
         $owner = if ($Matches.owner) { $Matches.owner } else { $Matches.owner_ssh }
@@ -53,26 +53,27 @@ $body = @{
     required_status_checks = @{
         strict = $true
         checks = @(
-            @{ context = "lint-and-test" },
-            @{ context = "merge-demo-pass" }
+            @{ context = "lint-and-test" }
         )
     }
     enforce_admins = $true
     required_pull_request_reviews = @{
         dismiss_stale_reviews = $true
         require_code_owner_reviews = $false
-        required_approving_review_count = $RequiredApprovals
+        required_approving_review_count = 0
         require_last_push_approval = $false
     }
     allow_force_pushes = $false
     allow_deletions = $false
     required_linear_history = $false
-    required_conversation_resolution = $true
+    required_conversation_resolution = $false
     restrictions = $null
 } | ConvertTo-Json -Depth 6
 
 $uri = "repos/$Repository/branches/$Branch/protection"
 
-Write-Host "Applying branch protection to $Repository/$Branch..."
+Write-Host "Relaxing branch protection on $Repository/$Branch..."
+Write-Host "  required checks: lint-and-test only (merge-demo-pass dropped)"
+Write-Host "  conversation resolution: off"
 $body | gh api -X PUT $uri --input -
-Write-Host "Branch protection applied. Direct pushes to $Branch are blocked; required approvals: $RequiredApprovals."
+Write-Host "Relaxed policy applied. Restore with: ./.github/scripts/protect-main.ps1"
