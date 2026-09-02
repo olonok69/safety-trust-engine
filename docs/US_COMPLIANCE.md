@@ -73,3 +73,6 @@ DORA/FCA; an EU-only run never claims NIST MEASURE.
 
 Presentation: [Safety_and_Trust_Engine_US.pptx](Safety_and_Trust_Engine_US.pptx)
 (regenerate with `uv run python scripts/build_us_deck.py` from the EU deck).
+
+Local speaker pack (gitignored, same pattern as the EU guides):
+`docs/no_subir/PACK_US.md` — speaker guide EN/ES, YouTube intros, slide-15 US notes.
