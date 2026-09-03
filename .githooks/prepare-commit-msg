@@ -1,0 +1,14 @@
+#!/bin/sh
+# Strip AI/agent Co-authored-by trailers so commits are not attributed to bots.
+# Install: git config core.hooksPath .githooks
+MSG_FILE="$1"
+[ -n "$MSG_FILE" ] || exit 0
+TMP="${MSG_FILE}.stripped"
+# Drop Co-authored-by lines for known agent identities (case-insensitive).
+grep -viE '^[[:space:]]*Co-authored-by:.*(cursor|cursoragent|anthropic|noreply@openai|copilot|claude)' \
+  "$MSG_FILE" > "$TMP" || true
+# Also drop any remaining Co-authored-by that names an obvious bot mailbox.
+grep -viE '^[[:space:]]*Co-authored-by:.*<(cursoragent|.*bot)@' "$TMP" > "${TMP}.2" || true
+mv "${TMP}.2" "$MSG_FILE"
+rm -f "$TMP"
+exit 0

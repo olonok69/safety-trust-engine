@@ -1,0 +1,10 @@
+#!/bin/sh
+MSG_FILE="$1"
+[ -n "$MSG_FILE" ] || exit 0
+TMP="${MSG_FILE}.stripped"
+grep -viE "^[[:space:]]*Co-authored-by:.*(cursor|cursoragent|anthropic|noreply@openai|copilot|claude)" \
+  "$MSG_FILE" > "$TMP" || true
+grep -viE "^[[:space:]]*Co-authored-by:.*<(cursoragent|.*bot)@" "$TMP" > "${TMP}.2" || true
+mv "${TMP}.2" "$MSG_FILE"
+rm -f "$TMP"
+exit 0
