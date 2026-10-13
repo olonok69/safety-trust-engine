@@ -26,6 +26,8 @@ uv run python -m safety_engine.run --demo
 
 Ejecuta los tres stages con datos sintéticos deterministas, escribe `runs/st-<ts>.{json,md}` y devuelve `1` porque la demo incumple tolerancias a propósito.
 
+Para implantar el gate (entorno, stages live, regímenes EU/UK, US o mixto, integración CI/CD): ver el [handbook de implementación](docs/IMPLEMENTATION_HANDBOOK_es.md) ([English](docs/IMPLEMENTATION_HANDBOOK.md)).
+
 ## Impact-tolerance gate
 
 `report.DEFAULT_TOLERANCES` define la tasa máxima aceptable de éxito de ataque (ASR) por categoría.
