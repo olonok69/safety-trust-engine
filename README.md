@@ -40,6 +40,11 @@ It runs all three stages with deterministic synthetic findings, writes
 `runs/st-<ts>.{json,md}`, and **exits 1** because the demo data breaches the
 injection tolerance on purpose — the blocking gate doing its job.
 
+Engineers deploying the gate (environment setup, live stages, EU/UK, US or
+mixed regimes, CI/CD wiring): see the
+[implementation handbook](docs/IMPLEMENTATION_HANDBOOK.md)
+([español](docs/IMPLEMENTATION_HANDBOOK_es.md)).
+
 ## The impact-tolerance gate
 
 `report.DEFAULT_TOLERANCES` sets a maximum acceptable **attack-success rate (ASR)**
