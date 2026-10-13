@@ -122,3 +122,25 @@ def test_cli_rejects_unknown_regime():
 
 def test_available_regimes_lists_both_packs():
     assert available_regimes() == [EU_UK, US]
+
+
+@pytest.mark.parametrize(
+    ("regime", "ref"),
+    [(EU_UK, "Impact tolerance"), (US, "SR 26-02 monitoring")],
+)
+def test_gate_style_controls_fail_on_any_breach(regime, ref):
+    """A control whose claim is "stay within tolerance" cannot pass a breach."""
+    report = build_report("st-gate", {"provider": "demo"}, _demo_results(),
+                          regimes=[regime])
+    verdict = next(v for v in report.control_verdicts if v.control.ref == ref)
+    breaching = {v.category for v in report.category_verdicts if not v.within}
+    assert breaching, "demo data is expected to breach a tolerance"
+    assert verdict.status == "fail"
+    assert set(verdict.breaching_categories) == breaching
+
+
+def test_gate_style_controls_pass_within_tolerance():
+    relaxed = {"prompt_injection": 0.20, "tool_injection": 0.20}
+    report = build_report("st-gate-ok", {"provider": "demo"}, _demo_results(),
+                          relaxed, regimes=[EU_UK, US])
+    assert report.overall_pass is True
