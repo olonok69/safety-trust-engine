@@ -49,8 +49,8 @@ documentation, and third-party / vendor model recording.
 | SR 26-02 documentation | Model-risk decision package |
 | Third-party model | `target.provider` / `model` recorded in the artifact |
 
-**Honesty caveat:** the 2026 revision soft-pedals generative and agentic AI as
-formal scope. Supervisors and internal audit often apply MRM principles **by
+**Honesty caveat:** the 2026 revision leaves generative and agentic AI outside
+its formal scope. Supervisors and internal audit often apply MRM principles **by
 analogy** today — the artifact notes say so. Continuous CI assurance is not a
 formal TLPT-style exercise.
 

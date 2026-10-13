@@ -33,6 +33,13 @@ GARAK = "garak"
 AGENTDOJO = "agentdojo"
 PYRIT = "pyrit"
 
+# Every normalized probe category. Gate-style controls (whose claim is "stay
+# within tolerance") list all of them, so any breach fails the control.
+ALL_CATEGORIES: tuple[str, ...] = (
+    "jailbreak", "prompt_injection", "encoding", "data_leakage",
+    "toxicity", "tool_injection", "harmful_action",
+)
+
 # Regime pack identifiers.
 EU_UK = "eu_uk"
 US = "us"
@@ -47,8 +54,8 @@ class Control:
     ref        : article / paragraph / section reference.
     label      : plain-language statement of the obligation.
     stages     : which stages must run for this control to be evidenced.
-    categories : probe categories that are most relevant (informational; used
-                 in the report to show *which* findings back the control).
+    categories : probe categories whose tolerance breach fails the control
+                 (also shown in the report as the findings backing it).
     note       : optional implementation note surfaced in the evidence artifact.
     binding    : statute | guidance | supervisory — honesty marker for artifacts.
     """
@@ -150,6 +157,7 @@ EU_UK_CONTROLS: list[Control] = [
         label="Remain within the impact tolerance set for the important "
         "business service (here: max tolerable attack-success rate).",
         stages=(GARAK, AGENTDOJO, PYRIT),
+        categories=ALL_CATEGORIES,
         note="Enforced by the tolerance gate in report.py.",
         binding="statute",
     ),
@@ -215,8 +223,8 @@ US_CONTROLS: list[Control] = [
         "via adversarial testing of the model or agent.",
         stages=(PYRIT, AGENTDOJO),
         categories=("jailbreak", "tool_injection", "harmful_action"),
-        note="Supervisory analogy for GenAI/agentic systems — SR 26-02 soft-pedals "
-        "formal GenAI scope; not a codified GenAI rule.",
+        note="Supervisory analogy for GenAI/agentic systems — SR 26-02 leaves "
+        "generative/agentic AI outside its formal scope; not a codified GenAI rule.",
         binding="supervisory",
     ),
     Control(
@@ -225,6 +233,7 @@ US_CONTROLS: list[Control] = [
         label="Ongoing monitoring: repeatable adversarial gate in CI with "
         "numeric attack-success tolerances.",
         stages=(GARAK, AGENTDOJO, PYRIT),
+        categories=ALL_CATEGORIES,
         note="Continuous CI assurance is not a formal TLPT-style exercise.",
         binding="supervisory",
     ),
