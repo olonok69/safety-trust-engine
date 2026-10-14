@@ -1,7 +1,7 @@
 """Parser tests -- garak JSONL ingest and Inspect/AgentDojo log reduction.
 
 These exercise the live-seam parsers against fixtures shaped like the real tool
-output (garak 0.9.0.9 report rows; Inspect EvalLog `.eval` zips and `--log-format
+output (garak 0.9.0.9 and 0.17.x report rows; Inspect EvalLog `.eval` zips and `--log-format
 json` files) without needing the tools installed. They guard the two failure
 modes that matter most for a compliance gate: crashing on a malformed log, and
 -- worse -- silently scoring an unparsed log as "0 hits" (a false PASS).
@@ -90,6 +90,33 @@ def test_garak_parser_tolerates_non_numeric_counts(tmp_path):
                          "detector": "d", "passed": "18.0", "total": "20"})
     result = _parse_garak_report(_write(tmp_path / "g.jsonl", report))
     assert result.probes[0].attempts == 20 and result.probes[0].hits == 2
+
+
+def test_garak_parser_reads_017_eval_rows(tmp_path):
+    """garak 0.17 drops `total` for `total_evaluated` + `fails` + `nones`."""
+    report = "\n".join([
+        json.dumps({"entry_type": "eval", "probe": "dan.Dan_11_0", "detector": "dan.DAN",
+                    "passed": 3, "fails": 7, "nones": 0,
+                    "total_evaluated": 10, "total_processed": 10}),
+        json.dumps({"entry_type": "eval", "probe": "encoding.InjectBase64",
+                    "detector": "encoding.DecodeMatch", "passed": 18, "fails": 1,
+                    "nones": 1, "total_evaluated": 19, "total_processed": 20}),
+    ])
+    result = _parse_garak_report(_write(tmp_path / "g.jsonl", report))
+    assert result.ran is True
+    by_cat = {p.category: p for p in result.probes}
+    assert (by_cat["jailbreak"].attempts, by_cat["jailbreak"].hits) == (10, 7)
+    # nones are excluded from evaluated outputs, so they are neither pass nor hit
+    assert (by_cat["encoding"].attempts, by_cat["encoding"].hits) == (19, 1)
+
+
+def test_garak_parser_rejects_eval_rows_without_counts(tmp_path):
+    """An unknown report shape must not silently read as 0% ASR."""
+    report = json.dumps({"entry_type": "eval", "probe": "dan.x", "detector": "d",
+                         "passed": 3})
+    result = _parse_garak_report(_write(tmp_path / "g.jsonl", report))
+    assert result.ran is False
+    assert "unsupported report format" in result.error
 
 
 def test_garak_category_mapping():

@@ -165,10 +165,15 @@ def _parse_garak_report(path: Path) -> StageResult:
     """Parse garak's JSONL eval entries into ProbeResults.
 
     garak writes one JSON object per line; `entry_type == "eval"` rows carry
-    `probe`, `passed`, `total`, and (one row per detector) `detector`. We treat
-    (total - passed) as hits and keep each (probe, detector) row distinct so the
-    worst-scoring detector drives the category ASR. Verified against garak
-    0.9.0.9; re-check if you pin a different version.
+    `probe`, `passed`, a count of evaluated outputs, and (one row per detector)
+    `detector`. Two shapes are supported:
+
+      * garak 0.9.x  -- `passed`, `total`; hits = total - passed.
+      * garak 0.17.x -- `passed`, `fails`, `nones`, `total_evaluated`; hits = fails.
+
+    Each (probe, detector) row stays distinct so the worst-scoring detector
+    drives the category ASR. An eval row carrying no recognisable count fails
+    the stage instead of silently reading as 0 attempts / 0% ASR.
 
     Robust to a stray non-object line, a non-eval row, or a non-numeric count --
     garak reports are otherwise UTF-8, so we decode as such (the locale codec on
@@ -182,14 +187,25 @@ def _parse_garak_report(path: Path) -> StageResult:
             continue
         if not isinstance(row, dict) or row.get("entry_type") != "eval":
             continue
-        total = _as_int(row.get("total"))
-        passed = _as_int(row.get("passed"))
         probe = str(row.get("probe", "unknown"))
+        passed = _as_int(row.get("passed"))
+        if "total" in row:                      # garak 0.9.x
+            total = _as_int(row.get("total"))
+            hits = total - passed
+        elif "total_evaluated" in row:          # garak 0.17.x
+            total = _as_int(row.get("total_evaluated"))
+            hits = _as_int(row["fails"]) if "fails" in row else total - passed
+        else:
+            return StageResult(
+                name=GARAK, ran=False,
+                error=f"garak eval row for '{probe}' has no total/total_evaluated "
+                      f"count -- unsupported report format: {path}",
+            )
         detector = row.get("detector")
         label = f"{probe}/{detector}" if detector else probe
         probes.append(ProbeResult(
             stage=GARAK, probe=label, category=_garak_category(probe),
-            attempts=total, hits=max(total - passed, 0),
+            attempts=total, hits=max(min(hits, total), 0),
         ))
     return StageResult(name=GARAK, ran=True, probes=probes)
 
