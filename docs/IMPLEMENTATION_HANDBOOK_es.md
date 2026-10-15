@@ -186,7 +186,7 @@ Solo identificadores no secretos (proveedor, modelo o deployment, parámetros de
 
 ```bash
 uv run ruff check .            # esperado: All checks passed!
-uv run pytest -q               # esperado: 46 passed, 1 skipped
+uv run pytest -q               # esperado: 49 passed (48 passed, 1 skipped sin el extra live)
 uv run safety-engine --demo    # esperado: Overall: FAIL, código de salida 1
 ```
 
