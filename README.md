@@ -120,8 +120,8 @@ sidecar — see below. A typical full live run:
 # 1. garak scan in its container -> runs/garak.report.jsonl
 docker build -t safety-garak garak
 docker run --rm --env-file .env -v ${PWD}/runs:/work/runs safety-garak \
-    --model_type openai --model_name gpt-3.5-turbo \
-    --probes dan,encoding,promptinject --generations 5 \
+    --target_type openai --target_name gpt-4o \
+    --spec probes.dan,probes.encoding,probes.promptinject --generations 5 \
     --report_prefix /work/runs/garak
 
 # 2. full gate: garak ingested + AgentDojo + PyRIT
@@ -131,15 +131,19 @@ safety-engine --target-provider openai --target-model gpt-4o \
 
 ### Why garak runs in Docker
 
-Every available garak (≤ 0.9.0.9) is built for the **openai v0.x** SDK
-(0.9.0.9 hard-pins `openai<1.0.0`; its generators call the removed
-`openai.error`). The engine's `live` extra needs **openai v1.x** (PyRIT/Inspect),
-an unresolvable conflict in one venv. So garak runs in its own container with its
-own openai 0.28.x, scans the model endpoint, and writes a report the engine
-ingests via `--garak-report`. See [garak/Dockerfile](garak/Dockerfile).
+The sidecar runs garak 0.17. It now shares the openai v1/v2 SDK with PyRIT and
+Inspect, but it pins `datasets<4.0` while inspect-evals (AgentDojo) needs
+`datasets>=4.8`, and it pulls torch + transformers. Keeping it in its own
+container keeps the `live` extra resolvable and light: garak scans the model
+endpoint and writes a report the engine ingests via `--garak-report`. See
+[garak/Dockerfile](garak/Dockerfile).
 
-> garak 0.9.0.9 only recognises `gpt-4` / `gpt-3.5-turbo` (and dated variants),
-> **not** `gpt-4o`/`gpt-4.1`. Use a recognised name; `gpt-3.5-turbo` is cheapest.
+garak 0.17 accepts any OpenAI chat model (`gpt-4o`, `gpt-4o-mini`, ...), ships its
+own Azure generator (`--target_type azure`, env `AZURE_API_KEY`,
+`AZURE_ENDPOINT`, `AZURE_MODEL_NAME`), and writes `garak.report.html` next to the
+JSONL report and `garak.hitlog.jsonl`. The ingest parser reads both the 0.17 and
+the older 0.9.x report format, and fails the stage instead of reporting 0% when
+it meets an eval row it cannot count.
 
 ## Red-teaming an agent (not just a model)
 
@@ -330,7 +334,7 @@ safety-trust-engine/
 │   ├── pyrit_campaign.py  # decoupled PyRIT campaign (model target or injected agent)
 │   ├── dataset.py         # the PyRIT attack objectives
 │   └── run.py             # orchestrator + CLI + CI exit code
-├── garak/                 # the isolated garak sidecar (Dockerfile + azure.py generator)
+├── garak/                 # the isolated garak 0.17 sidecar (Dockerfile)
 ├── examples/              # baseline garak evidence the CI safety-gate enforces
 ├── tests/                 # demo-mode + parser tests (zero-config)
 └── .github/workflows/safety-trust.yml
@@ -362,7 +366,8 @@ safety-trust-engine/
 - Inspect AI repository: https://github.com/UKGovernmentBEIS/inspect_ai
 - Inspect AI docs: https://inspect.aisi.org.uk/
 - PyRIT repository: https://github.com/microsoft/PyRIT
-- PyRIT docs (0.14.0): https://microsoft.github.io/PyRIT/0.14.0/
+- PyRIT docs: https://microsoft.github.io/PyRIT/
+- PyRIT releases: https://github.com/microsoft/PyRIT/releases
 - Azure AI Foundry red-teaming agent concept: https://learn.microsoft.com/en-us/azure/foundry/concepts/ai-red-teaming-agent
 
 ### Upstream citation guidance

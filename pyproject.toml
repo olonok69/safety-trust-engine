@@ -10,15 +10,16 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-# Live red-team stages. garak is intentionally absent -- it pins openai<1.0.0 and
-# is run as an isolated Docker sidecar (see garak/Dockerfile), its report ingested
-# via `--garak-report`.
+# Live red-team stages. garak is intentionally absent -- garak 0.17 pins
+# datasets<4.0 (inspect-evals needs >=4.8) and pulls torch, so it runs as an
+# isolated Docker sidecar (see garak/Dockerfile), its report ingested via
+# `--garak-report`.
 live = [
-    "pyrit>=0.13.0",
-    "inspect-ai>=0.3.239",
+    "pyrit>=1.1.0",
+    "inspect-ai>=0.3.280",
     # [agentdojo] pulls the AgentDojo tool-environment deps (pydantic[email],
     # deepdiff) that its Inbox/Workspace suites need at task-load time.
-    "inspect-evals[agentdojo]>=0.13.2",
+    "inspect-evals[agentdojo]>=0.24.0",
     "python-dotenv>=1.0.0",
 ]
 

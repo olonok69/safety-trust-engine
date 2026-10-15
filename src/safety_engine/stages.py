@@ -123,9 +123,10 @@ def run_garak(target, *, demo: bool = False, probes: str = "promptinject,dan,enc
         )
     # INGEST MODE ----------------------------------------------------------
     # Preferred path: parse a report produced out-of-process by the garak Docker
-    # sidecar (see garak/Dockerfile). garak pins openai<1.0.0 and cannot coexist
-    # with this engine's `live` extra (openai v1.x), so it runs in its own
-    # container and we ingest the JSONL evidence here -- no garak in this env.
+    # sidecar (see garak/Dockerfile). garak 0.17 pins datasets<4.0, which cannot
+    # coexist with this engine's `live` extra (inspect-evals needs datasets>=4.8),
+    # so it runs in its own container and we ingest the JSONL evidence here --
+    # no garak in this env.
     report_override = target.get("garak_report")
     if report_override:
         path = Path(report_override)
@@ -137,20 +138,21 @@ def run_garak(target, *, demo: bool = False, probes: str = "promptinject,dan,enc
                   f"sidecar first (see garak/Dockerfile)",
         )
     # LIVE SEAM ------------------------------------------------------------
-    # Fallback: shell out to a garak that IS installed in this env (only works
-    # where garak is compatible with the local openai SDK). Point its `rest`
-    # generator at your endpoint via a generator option file, or use the native
-    # generator, then parse the JSONL report it writes.
-    #   garak --model_type rest -G endpoint_rest.json \
-    #         --probes promptinject,dan,encoding --generations N \
+    # Fallback: shell out to a garak that IS installed in this env (garak 0.17
+    # pins datasets<4, which conflicts with the `live` extra, so this is for a
+    # separate env). Point its `rest` generator at your endpoint via a generator
+    # option file, or use a native generator, then parse the JSONL report.
+    #   garak --target_type rest -G endpoint_rest.json \
+    #         --spec probes.promptinject,probes.dan,probes.encoding --generations N \
     #         --report_prefix runs/st
     try:
         report = Path(target.get("garak_report_prefix", "runs/st") + ".report.jsonl")
         cmd = [
             "python", "-m", "garak",
-            "--model_type", target["garak_model_type"],
-            "--model_name", target["garak_model_name"],
-            "--probes", probes,
+            "--target_type", target["garak_model_type"],
+            "--target_name", target["garak_model_name"],
+            # garak 0.17 selects probes via --spec ("probes.<module>", comma list)
+            "--spec", ",".join(f"probes.{p.strip()}" for p in probes.split(",") if p.strip()),
             "--generations", str(generations),
             "--report_prefix", report.with_suffix("").with_suffix("").as_posix(),
         ]
