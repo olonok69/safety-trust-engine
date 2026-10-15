@@ -186,7 +186,7 @@ Only non-secret identifiers (provider, model or deployment name, stage settings)
 
 ```bash
 uv run ruff check .            # expect: All checks passed!
-uv run pytest -q               # expect: 46 passed, 1 skipped
+uv run pytest -q               # expect: 49 passed (48 passed, 1 skipped without the live extra)
 uv run safety-engine --demo    # expect: Overall: FAIL, exit code 1
 ```
 
