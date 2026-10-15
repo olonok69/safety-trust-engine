@@ -53,7 +53,7 @@ Key modules:
 | `src/safety_engine/providers.py` | `build_target`, `build_pyrit_target`, provider wiring |
 | `src/safety_engine/pyrit_campaign.py` | PyRIT campaign and judge configuration |
 | `src/safety_engine/dataset.py` | PyRIT red-team cases (`CASES`) |
-| `garak/Dockerfile`, `garak/azure.py` | garak sidecar image and Azure generator |
+| `garak/Dockerfile` | garak 0.17 sidecar image |
 | `.github/workflows/safety-trust.yml` | Reference CI pipeline |
 | `.github/scripts/protect-main.ps1`, `relax-main.ps1` | Branch-protection setup |
 | `.githooks/` | Commit hooks (strip bot co-author trailers) |
@@ -88,11 +88,11 @@ uv sync                      # core + dev group (pytest, ruff)
 ### 3.2 Install the live extra (only for live runs)
 
 ```bash
-uv sync --extra live         # pyrit>=0.13.0, inspect-ai>=0.3.239,
-                             # inspect-evals[agentdojo]>=0.13.2, python-dotenv
+uv sync --extra live         # pyrit>=1.1.0, inspect-ai>=0.3.280,
+                             # inspect-evals[agentdojo]>=0.24.0, python-dotenv
 ```
 
-garak is deliberately **not** in this extra: it pins `openai<1.0.0`, which conflicts with PyRIT and Inspect (openai ≥ 1.x).
+garak is deliberately **not** in this extra: garak 0.17 pins `datasets<4.0`, which conflicts with inspect-evals (`datasets>=4.8`), and it pulls torch and transformers.
 
 ### 3.3 Build the garak sidecar (only for live garak)
 
@@ -100,7 +100,7 @@ garak is deliberately **not** in this extra: it pins `openai<1.0.0`, which confl
 docker build -t safety-garak garak
 ```
 
-The image installs `garak==0.9.0.9` with CPU-only torch and registers the bundled Azure generator so `--model_type azure` works.
+The image installs `garak==0.17.0` with CPU-only torch. garak 0.17 accepts any OpenAI chat model and ships its own Azure generator (`--target_type azure`). Each scan writes `<prefix>.report.jsonl`, `<prefix>.hitlog.jsonl` and `<prefix>.report.html`.
 
 ### 3.4 Install the git hooks
 
@@ -144,6 +144,7 @@ cp .env.example .env           # .env is gitignored
 | `AZURE_OPENAI_CHAT_MODEL` | azure / foundry | Deployment name |
 | `AZURE_OPENAI_API_VERSION` | azure / foundry | e.g. `2024-12-01-preview` |
 | `FOUNDRY_MODEL_DEPLOYMENT_NAME` | foundry | Deployment name for Azure AI Foundry |
+| `AZURE_API_KEY`, `AZURE_ENDPOINT`, `AZURE_MODEL_NAME` | garak sidecar (azure) | Key, resource URL and underlying model for `--target_type azure` |
 | `GOOGLE_MODEL`, `GOOGLE_USE_VERTEX` | google | Default `gemini-1.5-pro`; Vertex vs AI Studio routing |
 | `BEDROCK_MODEL_ID` | bedrock | Default `anthropic.claude-3-5-sonnet-20240620-v1:0` |
 
@@ -321,25 +322,23 @@ uv run safety-engine --demo --regimes eu_uk,us --out runs/demo
 
 ### 8.2 garak (sidecar, then ingest)
 
-Public OpenAI (garak 0.9.0.9 only recognises `gpt-4`, `gpt-4-32k`, `gpt-3.5-turbo` for the stock generator):
+Public OpenAI (any chat model, e.g. `gpt-4o` or `gpt-4o-mini`):
 
 ```bash
 mkdir -p runs
 docker run --rm --env-file .env -v "$PWD/runs:/work/runs" safety-garak \
-  --model_type openai --model_name gpt-3.5-turbo \
-  --probes dan,encoding,promptinject --generations 5 \
+  --target_type openai --target_name gpt-4o-mini \
+  --spec probes.dan,probes.encoding,probes.promptinject --generations 5 \
   --report_prefix /work/runs/garak
 ```
 
-Azure OpenAI deployment (any deployment name, through the bundled `azure` generator):
+Azure OpenAI deployment (garak's built-in `azure` generator reads `AZURE_API_KEY`, `AZURE_ENDPOINT` and `AZURE_MODEL_NAME` from `.env`; `--target_name` is the deployment name):
 
 ```bash
 docker run --rm --env-file .env \
-  -e OPENAI_API_BASE="https://<resource>.openai.azure.com" \
-  -e OPENAI_API_VERSION="2024-12-01-preview" \
   -v "$PWD/runs:/work/runs" safety-garak \
-  --model_type azure --model_name <deployment> \
-  --probes dan,encoding,promptinject --generations 5 \
+  --target_type azure --target_name <deployment> \
+  --spec probes.dan,probes.encoding,probes.promptinject --generations 5 \
   --report_prefix /work/runs/garak-azure
 ```
 
@@ -383,7 +382,7 @@ uv run safety-engine --target-provider openai --target-model gpt-4o \
 
 Built-in PyRIT targets exist for `openai`, `azure` and `foundry` (`PYRIT_BUILDABLE_PROVIDERS`). For other providers, or to test an agent, see section 9.
 
-A PyRIT hit is a **non-refusal**: `hits = attempts − refusals`, because `SelfAskRefusalScorer` reports success when it detects a refusal (the v0.13 inversion).
+A PyRIT hit is a **non-refusal**: `hits = attempts − refusals`, because `SelfAskRefusalScorer` reports success when it detects a refusal (the inversion introduced in v0.13 and still present in 1.1).
 
 ### 8.5 Full gate (all three stages)
 
@@ -588,8 +587,8 @@ safety_gate:
     - uv sync --extra live
     - docker build -t safety-garak garak
     - docker run --rm -e OPENAI_API_KEY -v "$PWD/runs:/work/runs" safety-garak
-        --model_type openai --model_name gpt-3.5-turbo
-        --probes dan,encoding,promptinject --generations 5
+        --target_type openai --target_name gpt-4o-mini
+        --spec probes.dan,probes.encoding,probes.promptinject --generations 5
         --report_prefix /work/runs/garak
     - uv run inspect eval inspect_evals/agentdojo --model openai/gpt-4o
         -T attack=important_instructions -T with_sandbox_tasks=no --log-dir runs/agentdojo
@@ -634,8 +633,8 @@ Azure DevOps and Jenkins follow the same shape: install, run sidecar, run Inspec
 | Provider (`--target-provider`) | PyRIT target | garak sidecar | Inspect model id | Status |
 | --- | --- | --- | --- | --- |
 | `demo` | synthetic | synthetic | — | Complete (offline) |
-| `openai` | built in | `--model_type openai` (gpt-4 / gpt-3.5-turbo only) | `openai/<model>` | Complete |
-| `azure` | built in | `--model_type azure` (any deployment) | `azureai/<deployment>` | Complete |
+| `openai` | built in | `--target_type openai` (any chat model) | `openai/<model>` | Complete |
+| `azure` | built in | `--target_type azure` (any deployment) | `azureai/<deployment>` | Complete |
 | `foundry` | built in (alias of azure) | as azure | `azureai/<deployment>` | Complete |
 | `google` | not built in; use `target_factory` | `litellm` | `google/<model>` or `vertex/<model>` | Scaffolded |
 | `bedrock` | not built in; use `target_factory` | `litellm` | `bedrock/<model>` | Scaffolded |
@@ -676,8 +675,8 @@ Run `uv run ruff check . && uv run pytest -q` after any change.
 | --- | --- | --- |
 | `Overall: FAIL` with `0 failing, N not evidenced` | One or more stages skipped or not selected | Check `[stage] SKIPPED (...)` lines and `jq '.stages[] \| select(.ran==false)'`; run all three stages |
 | `garak report not found` | Sidecar not run or wrong path | Run the sidecar first; check `--report_prefix` ends in `/work/runs/<name>` and the file is `<name>.report.jsonl` |
-| garak: model not supported | Stock generator only allows gpt-4 / gpt-4-32k / gpt-3.5-turbo | Use `gpt-3.5-turbo`, or Azure with `--model_type azure` |
-| garak Azure 404 | `api_base` contains a path | Pass the bare resource host via `OPENAI_API_BASE` |
+| garak stage `unsupported report format` | Report from a garak version whose eval rows carry neither `total` nor `total_evaluated` | Use the sidecar image (garak 0.17) or garak 0.9.x; the parser reads both |
+| garak Azure auth / 404 | `AZURE_ENDPOINT` / `AZURE_MODEL_NAME` missing or wrong | Set `AZURE_API_KEY`, `AZURE_ENDPOINT` (resource URL) and `AZURE_MODEL_NAME` (underlying model) in `.env` |
 | `agentdojo log dir not found` | Inspect not run or different `--log-dir` | Run `inspect eval ... --log-dir runs/agentdojo` first |
 | AgentDojo needs Docker sandbox | Sandbox tasks enabled | Keep `-T with_sandbox_tasks=no` |
 | Inspect auth error although `.env` is filled | Inspect reads the process environment only | Export the variables (section 4.3) |
@@ -695,7 +694,7 @@ Run `uv run ruff check . && uv run pytest -q` after any change.
 ## 16. Known limitations
 
 - The demo data is synthetic. It exercises the gate logic; it is not evidence about any model.
-- garak runs at 0.9.0.9 in an isolated container because of its openai v0.x pin.
+- garak 0.17 runs in an isolated container because it pins `datasets<4.0` (incompatible with inspect-evals) and pulls torch.
 - Google and Bedrock are scaffolded: garak via litellm and Inspect work, PyRIT needs a `target_factory`.
 - PyRIT ships five demonstration objectives for a finance assistant. Production use needs a case set designed for your service.
 - ASR is computed on the samples run; small sample counts give coarse rates. Size `--generations` and AgentDojo task selection to the tolerance you enforce (a 5 % tolerance needs well over 20 attempts per category to be meaningful).
@@ -728,8 +727,8 @@ uv run safety-engine --demo --regimes eu_uk,us \
 
 # Live evidence
 docker run --rm --env-file .env -v "$PWD/runs:/work/runs" safety-garak \
-  --model_type openai --model_name gpt-3.5-turbo \
-  --probes dan,encoding,promptinject --generations 5 --report_prefix /work/runs/garak
+  --target_type openai --target_name gpt-4o-mini \
+  --spec probes.dan,probes.encoding,probes.promptinject --generations 5 --report_prefix /work/runs/garak
 uv run inspect eval inspect_evals/agentdojo --model openai/gpt-4o \
   -T attack=important_instructions -T with_sandbox_tasks=no --log-dir runs/agentdojo
 uv run safety-engine --target-provider openai --target-model gpt-4o \

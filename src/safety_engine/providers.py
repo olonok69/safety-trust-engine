@@ -2,7 +2,7 @@
 
 The three live stages each need the target described in their *own* dialect:
 
-    - garak     -> a `--model_type` + `--model_name` pair (run as a Docker
+    - garak     -> a `--target_type` + `--target_name` pair (run as a Docker
                    sidecar; see garak/Dockerfile)
     - AgentDojo -> an Inspect AI provider-prefixed model string
                    (`azureai/<deployment>`, `google/<model>`, `bedrock/<id>` ...)
@@ -79,7 +79,7 @@ def _azure(model: str | None) -> dict:
     )
     return {
         "model": deployment,
-        "garak_model_type": "openai",  # garak sidecar in Azure mode via env
+        "garak_model_type": "azure",  # garak's built-in Azure generator (AZURE_* env)
         "garak_model_name": deployment,
         "inspect_model": f"azureai/{deployment}",
         "endpoint": os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("AZURE_ENDPOINT"),

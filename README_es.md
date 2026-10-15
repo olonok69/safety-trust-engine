@@ -78,14 +78,14 @@ safety-engine --target-provider azure --target-model gpt-4o --stages agentdojo,p
 uv sync --extra live
 ```
 
-PyRIT y AgentDojo corren in-process. garak corre en sidecar Docker.
+PyRIT y AgentDojo corren in-process. garak (0.17) corre en sidecar Docker: pide `datasets<4.0`, incompatible con inspect-evals (`datasets>=4.8`), y arrastra torch. Admite cualquier modelo de chat de OpenAI, trae generador Azure propio (`--target_type azure`) y genera `garak.report.html`.
 
 ```bash
 # 1) garak sidecar -> runs/garak.report.jsonl
 docker build -t safety-garak garak
 docker run --rm --env-file .env -v ${PWD}/runs:/work/runs safety-garak \
-  --model_type openai --model_name gpt-3.5-turbo \
-  --probes dan,encoding,promptinject --generations 5 \
+  --target_type openai --target_name gpt-4o \
+  --spec probes.dan,probes.encoding,probes.promptinject --generations 5 \
   --report_prefix /work/runs/garak
 
 # 2) gate completa con ingestión + stages live
@@ -205,7 +205,8 @@ safety-trust-engine/
 - Repositorio Inspect AI: https://github.com/UKGovernmentBEIS/inspect_ai
 - Documentación Inspect AI: https://inspect.aisi.org.uk/
 - Repositorio PyRIT: https://github.com/microsoft/PyRIT
-- Documentación PyRIT (0.14.0): https://microsoft.github.io/PyRIT/0.14.0/
+- Documentación PyRIT: https://microsoft.github.io/PyRIT/
+- Releases de PyRIT: https://github.com/microsoft/PyRIT/releases
 - Concepto de agente de red-teaming en Azure AI Foundry: https://learn.microsoft.com/en-us/azure/foundry/concepts/ai-red-teaming-agent
 
 ### Guia de citacion de herramientas upstream

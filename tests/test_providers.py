@@ -23,6 +23,7 @@ def test_openai_target_shape():
 def test_azure_target_shape():
     t = build_target("azure", "gpt-4o")
     assert t["inspect_model"] == "azureai/gpt-4o"
+    assert t["garak_model_type"] == "azure"  # garak 0.17 built-in Azure generator
     assert t["pyrit_buildable"] is True
 
 
